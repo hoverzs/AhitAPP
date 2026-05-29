@@ -1,0 +1,336 @@
+{
+  "title": "30 napos áhítatos olvasási terv",
+  "generatedAt": "2026-05-29T00:00:00.000Z",
+  "weeks": [
+    {
+      "weekNumber": 1,
+      "theme": "Önreflexió",
+      "themeEn": "Self-reflection",
+      "days": [
+        { "dayNumber": 1, "verseReference": "Róma 12:1-2", "themeCategory": "Átadás" },
+        { "dayNumber": 2, "verseReference": "Zsoltárok 139:23-24", "themeCategory": "Szívfeltárás" },
+        { "dayNumber": 3, "verseReference": "2 Korinthus 13:5", "themeCategory": "Őszinte vizsgálat" },
+        { "dayNumber": 4, "verseReference": "Példabeszédek 4:23", "themeCategory": "Szív őrzése" },
+        { "dayNumber": 5, "verseReference": "Zsoltárok 51:12", "themeCategory": "Megújulás" },
+        { "dayNumber": 6, "verseReference": "Lamentációk 3:40", "themeCategory": "Visszatérés" },
+        { "dayNumber": 7, "verseReference": "Jakab 4:8", "themeCategory": "Közeledés" }
+      ]
+    },
+    {
+      "weekNumber": 2,
+      "theme": "Kegyelem",
+      "themeEn": "Grace",
+      "days": [
+        { "dayNumber": 8, "verseReference": "Efézus 2:8-9", "themeCategory": "Ingyen kapott ajándék" },
+        { "dayNumber": 9, "verseReference": "Róma 5:8", "themeCategory": "Idő előtti szeretet" },
+        { "dayNumber": 10, "verseReference": "2 Korinthus 12:9", "themeCategory": "Gyenge vagyok, ő erős" },
+        { "dayNumber": 11, "verseReference": "Títusz 3:5", "themeCategory": "Újjászületés" },
+        { "dayNumber": 12, "verseReference": "Zsoltárok 103:10-12", "themeCategory": "Megbocsátás" },
+        { "dayNumber": 13, "verseReference": "János 1:16", "themeCategory": "Kegyelem teljessége" },
+        { "dayNumber": 14, "verseReference": "Róma 8:1", "themeCategory": "Nincs ítélet" }
+      ]
+    },
+    {
+      "weekNumber": 3,
+      "theme": "Békesség",
+      "themeEn": "Peace",
+      "days": [
+        { "dayNumber": 15, "verseReference": "János 14:27", "themeCategory": "Örökségünk békéje" },
+        { "dayNumber": 16, "verseReference": "Filippi 4:6-7", "themeCategory": "Minden gond imában" },
+        { "dayNumber": 17, "verseReference": "Kolossé 3:15", "themeCategory": "Béke uralkodása" },
+        { "dayNumber": 18, "verseReference": "Zsoltárok 46:10", "themeCategory": "Csend és elismerés" },
+        { "dayNumber": 19, "verseReference": "Ézsaiás 26:3", "themeCategory": "Megtartott lélek" },
+        { "dayNumber": 20, "verseReference": "2 Teszalonika 3:16", "themeCategory": "Békesség Ura" },
+        { "dayNumber": 21, "verseReference": "Zsoltárok 29:11", "themeCategory": "Erő és béke" }
+      ]
+    },
+    {
+      "weekNumber": 4,
+      "theme": "Szeretet",
+      "themeEn": "Love",
+      "days": [
+        { "dayNumber": 22, "verseReference": "1 János 4:19", "themeCategory": "Előbb szeretett" },
+        { "dayNumber": 23, "verseReference": "1 Korinthus 13:4-5", "themeCategory": "A szeretet természete" },
+        { "dayNumber": 24, "verseReference": "János 15:12", "themeCategory": "Egymás szeretete" },
+        { "dayNumber": 25, "verseReference": "1 János 3:18", "themeCategory": "Tett, nem csak szó" },
+        { "dayNumber": 26, "verseReference": "Róma 13:10", "themeCategory": "Szeretet betölti" },
+        { "dayNumber": 27, "verseReference": "Máté 22:37-39", "themeCategory": "Legnagyobb parancs" },
+        { "dayNumber": 28, "verseReference": "Galata 5:22", "themeCategory": "Lélek gyümölcse" },
+        { "dayNumber": 29, "verseReference": "Efézus 5:2", "themeCategory": "Kristus szerint élni" },
+        { "dayNumber": 30, "verseReference": "1 János 4:7-8", "themeCategory": "Isten szeretete" }
+      ]
+    }
+  ],
+  "days": [
+    {
+      "dayNumber": 1,
+      "verseReference": "Róma 12:1-2",
+      "themeCategory": "Átadás",
+      "verseText": "Kérlek titeket azért, testvéreim, az Isten irgalmassága által, hogy adjátok oda testeteket élő, szent és Istennek tetsző áldozatul.",
+      "imagePromptSubject": "open hands offering light at dawn altar",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 2,
+      "verseReference": "Zsoltárok 139:23-24",
+      "themeCategory": "Szívfeltárás",
+      "verseText": "Vizsgálj meg engem, Isten, és ismerd meg az én szívemet; próbálj meg engem, és ismerd meg az én gondolataimat!",
+      "imagePromptSubject": "quiet mirror reflecting soft morning light",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 3,
+      "verseReference": "2 Korinthus 13:5",
+      "themeCategory": "Őszinte vizsgálat",
+      "verseText": "Magatokat vizsgáljátok meg, vajon igazán hitben vagytok-e; önmagatokat próbáljátok ki.",
+      "imagePromptSubject": "lantern on a narrow forest path at dusk",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 4,
+      "verseReference": "Példabeszédek 4:23",
+      "themeCategory": "Szív őrzése",
+      "verseText": "Minden féltéssel őrizd meg a te szívedet, mert onnan indul ki az életnek forrása.",
+      "imagePromptSubject": "ancient wooden door with warm light inside",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 5,
+      "verseReference": "Zsoltárok 51:12",
+      "themeCategory": "Megújulás",
+      "verseText": "Téríts engem örömödbe, és a te szabadító lelkeddel erősíts meg engem!",
+      "imagePromptSubject": "fresh spring bud breaking through dark soil",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 6,
+      "verseReference": "Lamentációk 3:40",
+      "themeCategory": "Visszatérés",
+      "verseText": "Vizsgáljuk meg útjainkat, és térjünk vissza az Úrhoz!",
+      "imagePromptSubject": "footprints turning homeward on a sandy path",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 7,
+      "verseReference": "Jakab 4:8",
+      "themeCategory": "Közeledés",
+      "verseText": "Közeledjetek az Istenhez, és közeledik hozzátok. Tisztítsátok meg kezeiteket, bűnösök, és tisztítsátok meg szíveteket, kétszívűek!",
+      "imagePromptSubject": "two figures kneeling in gentle chapel light",
+      "weekNumber": 1,
+      "weekTheme": "Önreflexió"
+    },
+    {
+      "dayNumber": 8,
+      "verseReference": "Efézus 2:8-9",
+      "themeCategory": "Ingyen kapott ajándék",
+      "verseText": "Mert a kegyelemből tartattatok meg, a hit által; és ez nem tiétekből való, Isten ajándéka.",
+      "imagePromptSubject": "simple gift wrapped in linen with golden ribbon",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 9,
+      "verseReference": "Róma 5:8",
+      "themeCategory": "Idő előtti szeretet",
+      "verseText": "Akkor is, mikor még erőtelenek voltunk, Krisztus meghalt a bűnösökért.",
+      "imagePromptSubject": "cross silhouette against warm sunset sky",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 10,
+      "verseReference": "2 Korinthus 12:9",
+      "themeCategory": "Gyenge vagyok, ő erős",
+      "verseText": "Elég néked az én kegyelmem, mert az én erőm erőtlenségben telik be.",
+      "imagePromptSubject": "cracked clay vessel glowing from within",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 11,
+      "verseReference": "Títusz 3:5",
+      "themeCategory": "Újjászületés",
+      "verseText": "Nem az igazság cselekedeteiből, amelyeket mi cselekedtünk, hanem az ő irgalmassága szerint mentett meg minket.",
+      "imagePromptSubject": "water pouring into cup with ripples of light",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 12,
+      "verseReference": "Zsoltárok 103:10-12",
+      "themeCategory": "Megbocsátás",
+      "verseText": "Nem tartja szem előtt a mi vétkezésünket, és nem tartja magában haragját örökké.",
+      "imagePromptSubject": "east wind blowing white clouds over open field",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 13,
+      "verseReference": "János 1:16",
+      "themeCategory": "Kegyelem teljessége",
+      "verseText": "És az ő teljességéből vettünk mindnyájan, és kegyelem kegyelemre.",
+      "imagePromptSubject": "overflowing cup of clear water in sunlight",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 14,
+      "verseReference": "Róma 8:1",
+      "themeCategory": "Nincs ítélet",
+      "verseText": "Most már nincs semmi kárhoztatás azoknak, akik Krisztus Jézusban vannak.",
+      "imagePromptSubject": "broken chains lying on stone in morning light",
+      "weekNumber": 2,
+      "weekTheme": "Kegyelem"
+    },
+    {
+      "dayNumber": 15,
+      "verseReference": "János 14:27",
+      "themeCategory": "Örökségünk békéje",
+      "verseText": "Békességet hagyok nektek, az én békémet adom nektek; nem úgy adom, ahogyan a világ adja.",
+      "imagePromptSubject": "still mountain lake at dawn with mist",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 16,
+      "verseReference": "Filippi 4:6-7",
+      "themeCategory": "Minden gond imában",
+      "verseText": "Ne aggódjatok semmi miatt, hanem imádságotokban és könyörgésetekben mindenütt hálákat adjatok Istennek!",
+      "imagePromptSubject": "folded hands beside candle in soft darkness",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 17,
+      "verseReference": "Kolossé 3:15",
+      "themeCategory": "Béke uralkodása",
+      "verseText": "És a béke uralkodjék a ti szívetekben, amelyre hivatottok is egy testben.",
+      "imagePromptSubject": "olive branch resting on white smooth stone",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 18,
+      "verseReference": "Zsoltárok 46:10",
+      "themeCategory": "Csend és elismerés",
+      "verseText": "Hallgassatok, és ismerjétek el, hogy én vagyok Isten!",
+      "imagePromptSubject": "absolute stillness over calm sea horizon",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 19,
+      "verseReference": "Ézsaiás 26:3",
+      "themeCategory": "Megtartott lélek",
+      "verseText": "A kitartó elmét megtartod békességben, mert benned bízik.",
+      "imagePromptSubject": "anchor resting peacefully in clear harbor water",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 20,
+      "verseReference": "2 Teszalonika 3:16",
+      "themeCategory": "Békesség Ura",
+      "verseText": "Magától a békesség Ura adjon nektek békességet mindenkor mindenben.",
+      "imagePromptSubject": "gentle dove gliding over quiet meadow",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 21,
+      "verseReference": "Zsoltárok 29:11",
+      "themeCategory": "Erő és béke",
+      "verseText": "Az Úr erősséget ád az ő népének; az Úr megáldja az ő népét békességgel.",
+      "imagePromptSubject": "strong oak tree in peaceful sunlit valley",
+      "weekNumber": 3,
+      "weekTheme": "Békesség"
+    },
+    {
+      "dayNumber": 22,
+      "verseReference": "1 János 4:19",
+      "themeCategory": "Előbb szeretett",
+      "verseText": "Mi szeretünk, mert ő előbb szeretett minket.",
+      "imagePromptSubject": "warm embrace of light around two silhouettes",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 23,
+      "verseReference": "1 Korinthus 13:4-5",
+      "themeCategory": "A szeretet természete",
+      "verseText": "A szeretet hosszútűrő, a szeretet kegyelmes, a szeretet nem irítkozik.",
+      "imagePromptSubject": "woven golden threads of soft light",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 24,
+      "verseReference": "János 15:12",
+      "themeCategory": "Egymás szeretete",
+      "verseText": "Az én parancsolatom ez: Szeressétek egymást, amint én szerettelek titeket.",
+      "imagePromptSubject": "circle of people holding hands at sunset",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 25,
+      "verseReference": "1 János 3:18",
+      "themeCategory": "Tett, nem csak szó",
+      "verseText": "Kisfiaim, ne szeressünk szóval és nyelvvel, hanem cselekedettel és valósággal.",
+      "imagePromptSubject": "hands sharing bread with someone in need",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 26,
+      "verseReference": "Róma 13:10",
+      "themeCategory": "Szeretet betölti",
+      "verseText": "A szeretet nem tesz rosszat a felebarátjának; a szeretet tehát a törvény betöltése.",
+      "imagePromptSubject": "open book with gentle light on wooden table",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 27,
+      "verseReference": "Máté 22:37-39",
+      "themeCategory": "Legnagyobb parancs",
+      "verseText": "Szeresd Uradat, Istenedet, teljes szívedből… és felebarátodat, mint önmagadat.",
+      "imagePromptSubject": "path splitting toward bright horizon light",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 28,
+      "verseReference": "Galata 5:22",
+      "themeCategory": "Lélek gyümölcse",
+      "verseText": "A Lélek gyümölcse pedig szeretet, öröm, béke, hosszúság, jóság.",
+      "imagePromptSubject": "fruit tree branch with blossoms in soft light",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 29,
+      "verseReference": "Efézus 5:2",
+      "themeCategory": "Kristus szerint élni",
+      "verseText": "És járjatok szeretetben, amint Krisztus is szeretett minket.",
+      "imagePromptSubject": "lamb and light symbol in pastoral meadow",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    },
+    {
+      "dayNumber": 30,
+      "verseReference": "1 János 4:7-8",
+      "themeCategory": "Isten szeretete",
+      "verseText": "Szeretteim, szeressük egymást, mert a szeretet Istentől van; mert Isten szeretet.",
+      "imagePromptSubject": "radiant sky with raised hands in worship silhouette",
+      "weekNumber": 4,
+      "weekTheme": "Szeretet"
+    }
+  ]
+}
