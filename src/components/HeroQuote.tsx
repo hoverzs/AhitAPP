@@ -1,8 +1,40 @@
 interface HeroQuoteProps {
-  variant?: "card" | "hero";
+  variant?: "card" | "hero" | "mobile";
+}
+
+function QuoteLines({ highlightClassName }: { highlightClassName: string }) {
+  return (
+    <>
+      <span className="hero-quote-line">Lehet az út tövises, meredek,</span>
+      <span className="hero-quote-line">amerre vezetsz, bátran mehetek.</span>
+      <span className="hero-quote-line">S mindennapi kérésem az marad:</span>
+      <span className={highlightClassName}>
+        „Add, hogy csupán Téged kívánjalak!”
+      </span>
+    </>
+  );
+}
+
+function QuoteCitation({ className = "" }: { className?: string }) {
+  return (
+    <footer className={className}>
+      — Túrmezei Erzsébet: <cite className="not-italic">A legnehezebb kérés</cite>
+    </footer>
+  );
 }
 
 export function HeroQuote({ variant = "card" }: HeroQuoteProps) {
+  if (variant === "mobile") {
+    return (
+      <blockquote className="hero-quote-mobile">
+        <p className="hero-quote-mobile-body">
+          <QuoteLines highlightClassName="hero-quote-mobile-highlight" />
+        </p>
+        <QuoteCitation className="hero-quote-mobile-cite" />
+      </blockquote>
+    );
+  }
+
   if (variant === "hero") {
     return (
       <blockquote className="hero-quote max-w-xl text-left relative">
@@ -10,16 +42,9 @@ export function HeroQuote({ variant = "card" }: HeroQuoteProps) {
           „
         </span>
         <p className="hero-quote-body">
-          <span className="hero-quote-line">Lehet az út tövises, meredek,</span>
-          <span className="hero-quote-line">amerre vezetsz, bátran mehetek.</span>
-          <span className="hero-quote-line">S mindennapi kérésem az marad:</span>
-          <span className="hero-quote-highlight">
-            „Add, hogy csupán Téged kívánjalak!”
-          </span>
+          <QuoteLines highlightClassName="hero-quote-highlight" />
         </p>
-        <footer className="hero-quote-cite">
-          — Túrmezei Erzsébet: <cite className="not-italic">A legnehezebb kérés</cite>
-        </footer>
+        <QuoteCitation className="hero-quote-cite" />
       </blockquote>
     );
   }
