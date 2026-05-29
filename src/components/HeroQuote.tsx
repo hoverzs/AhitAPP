@@ -10,12 +10,9 @@ export function HeroQuote({ variant = "card" }: HeroQuoteProps) {
           „
         </span>
         <p className="hero-quote-body">
-          Lehet az út tövises, meredek,
-          <br />
-          amerre vezetsz, bátran mehetek.
-          <br />
-          S mindennapi kérésem az marad:
-          <br />
+          <span className="hero-quote-line">Lehet az út tövises, meredek,</span>
+          <span className="hero-quote-line">amerre vezetsz, bátran mehetek.</span>
+          <span className="hero-quote-line">S mindennapi kérésem az marad:</span>
           <span className="hero-quote-highlight">
             „Add, hogy csupán Téged kívánjalak!”
           </span>

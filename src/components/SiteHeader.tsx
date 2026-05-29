@@ -98,9 +98,9 @@ export function SiteHeader({ todayHref }: SiteHeaderProps) {
           </div>
         </div>
 
-        <div className="relative z-10 mt-auto pb-10 sm:pb-12 md:pb-14 shrink-0">
+        <div className="relative z-10 mt-auto pb-6 sm:pb-10 md:pb-14 shrink-0">
           <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
-            <div className="hero-quote-panel max-w-xl px-6 py-6 sm:px-8 sm:py-8">
+            <div className="hero-quote-panel w-full max-w-xl px-4 py-4 sm:px-8 sm:py-8">
               <HeroQuote variant="hero" />
             </div>
           </div>
