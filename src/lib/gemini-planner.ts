@@ -2,6 +2,8 @@ import {
   GEMINI_PLANNER_MAX_OUTPUT_TOKENS,
   GEMINI_PLANNER_MODEL,
   GEMINI_PLANNER_RETRY_MAX_OUTPUT_TOKENS,
+  GEMINI_PLANNER_RETRY_TEMPERATURE,
+  GEMINI_PLANNER_TEMPERATURE,
 } from "./config";
 import {
   buildDynamicPlannerSystemPrompt,
@@ -11,9 +13,9 @@ import type { DevotionalMemory } from "./devotional-memory";
 import { isVerseReferenceUsed, extractVerseReference } from "./devotional-memory";
 import type { DynamicPlannedDay } from "./types";
 import { logGeminiError } from "./gemini-client";
+import { buildFallbackPlannedDay } from "./gemini-planner-fallback";
 import {
   geminiGenerateContentRestDetailed,
-  GeminiResponseError,
   isGeminiResponseError,
   isRetriableGeminiResponseError,
   logRawGeminiResponse,
@@ -32,8 +34,10 @@ const MAX_ATTEMPTS = 2;
 type PlannerLogEvent =
   | "start"
   | "token_overflow"
+  | "invalid_json"
   | "invalid_json_retry"
   | "retry"
+  | "fallback_mode"
   | "success"
   | "failure";
 
@@ -86,10 +90,11 @@ function parsePlannerResponse(
   }
 
   if (!parsed) {
-    console.error(
-      `${LOG_PREFIX} JSON parse failed. Model text (first 2k):`,
-      raw.slice(0, 2000)
-    );
+    plannerLog("invalid_json", {
+      expectedDay,
+      preview: raw.slice(0, 300),
+      error: lastError instanceof Error ? lastError.message : "parse failed",
+    });
     throw new Error(
       lastError instanceof Error
         ? `JSON feldolgozási hiba: ${lastError.message}`
@@ -100,27 +105,55 @@ function parsePlannerResponse(
   return mapRawGeminiToPlannedDay(parsed, expectedDay);
 }
 
+function finalizePlanned(
+  planned: DynamicPlannedDay,
+  memory: DevotionalMemory,
+  meta: Record<string, unknown>
+): DynamicPlannedDay {
+  const ref = extractVerseReference(planned.verse);
+
+  if (isVerseReferenceUsed(ref, memory.usedVerseReferences)) {
+    throw new Error(
+      `A generált vers már szerepelt a múltban: ${ref}. Próbáld újra a generálást.`
+    );
+  }
+
+  plannerLog("success", {
+    dayNumber: planned.dayNumber,
+    title: planned.title,
+    contentChars: planned.content.length,
+    ...meta,
+  });
+
+  return planned;
+}
+
 /**
- * Planner: minimális JSON, maxOutputTokens 1400–1600, max 2 próbálkozás.
+ * Planner: minimális JSON, maxOutputTokens 1200, max 2 retry, plain-text fallback.
  */
 export async function planAndGenerateNextDay(
   memory: DevotionalMemory
 ): Promise<DynamicPlannedDay> {
-  const systemInstruction = buildDynamicPlannerSystemPrompt();
   let lastError: unknown;
+  let lastRaw = "";
 
   plannerLog("start", {
     dayNumber: memory.nextDayNumber,
     maxAttempts: MAX_ATTEMPTS,
     maxOutputTokens: GEMINI_PLANNER_MAX_OUTPUT_TOKENS,
+    temperature: GEMINI_PLANNER_TEMPERATURE,
   });
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const shortened = attempt > 1;
+    const systemInstruction = buildDynamicPlannerSystemPrompt(shortened);
     const userPrompt = buildDynamicPlannerUserPrompt(memory, { shortened });
 
     if (shortened) {
-      plannerLog("retry", { attempt, reason: lastError instanceof Error ? lastError.message : "previous_failure" });
+      plannerLog("retry", {
+        attempt,
+        reason: lastError instanceof Error ? lastError.message : "previous_failure",
+      });
     }
 
     try {
@@ -133,13 +166,16 @@ export async function planAndGenerateNextDay(
         systemInstruction,
         userPrompt,
         generationConfig: {
-          temperature: shortened ? 0.55 : 0.7,
+          temperature: shortened
+            ? GEMINI_PLANNER_RETRY_TEMPERATURE
+            : GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens,
         },
         logContext: `planAndGenerateNextDay/attempt-${attempt}`,
         maxAttempts: 1,
       });
 
+      lastRaw = raw;
       const hitMaxTokens = finishReason === "MAX_TOKENS";
 
       if (hitMaxTokens) {
@@ -152,14 +188,15 @@ export async function planAndGenerateNextDay(
       }
 
       if (hitMaxTokens && attempt < MAX_ATTEMPTS) {
+        lastError = new Error("MAX_TOKENS");
         continue;
       }
 
-      let planned: DynamicPlannedDay;
       try {
-        planned = parsePlannerResponse(raw, memory.nextDayNumber, {
+        const planned = parsePlannerResponse(raw, memory.nextDayNumber, {
           allowTruncatedRepair: hitMaxTokens,
         });
+        return finalizePlanned(planned, memory, { attempt, mode: "json" });
       } catch (parseError) {
         if (attempt < MAX_ATTEMPTS) {
           plannerLog("invalid_json_retry", {
@@ -172,35 +209,11 @@ export async function planAndGenerateNextDay(
         }
 
         if (hitMaxTokens) {
-          throw new GeminiResponseError({
-            issue: "MAX_TOKENS",
-            finishReason,
-            diagnostics: `parse failed after MAX_TOKENS, ${raw.length} chars`,
-            partialText: raw.slice(0, 500),
-            message:
-              "A modell válasza elérte a tokenlimitet és a levágott szöveg nem volt érvényes JSON. Próbáld újra.",
-          });
+          lastError = parseError;
+          break;
         }
         throw parseError;
       }
-
-      const ref = extractVerseReference(planned.verse);
-
-      if (isVerseReferenceUsed(ref, memory.usedVerseReferences)) {
-        throw new Error(
-          `A generált vers már szerepelt a múltban: ${ref}. Próbáld újra a generálást.`
-        );
-      }
-
-      plannerLog("success", {
-        attempt,
-        dayNumber: planned.dayNumber,
-        title: planned.title,
-        contentChars: planned.content.length,
-        hitMaxTokens,
-      });
-
-      return planned;
     } catch (error) {
       lastError = error;
 
@@ -231,6 +244,26 @@ export async function planAndGenerateNextDay(
       }
 
       break;
+    }
+  }
+
+  if (lastRaw.trim()) {
+    plannerLog("fallback_mode", {
+      dayNumber: memory.nextDayNumber,
+      rawChars: lastRaw.length,
+      reason: lastError instanceof Error ? lastError.message : "exhausted_retries",
+    });
+
+    try {
+      const planned = buildFallbackPlannedDay(lastRaw, memory.nextDayNumber, {
+        categoryHint: memory.usedCategories.at(-1),
+      });
+      return finalizePlanned(planned, memory, { attempt: MAX_ATTEMPTS, mode: "fallback" });
+    } catch (fallbackError) {
+      plannerLog("failure", {
+        mode: "fallback",
+        error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+      });
     }
   }
 

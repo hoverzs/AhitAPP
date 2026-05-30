@@ -17,7 +17,7 @@ export interface RawGeminiPlannedDay {
   facebookCopy?: string;
 }
 
-export function limitImageKeywords(raw: string | undefined, max = 5): string | undefined {
+export function limitImageKeywords(raw: string | undefined, max = 4): string | undefined {
   if (!raw?.trim()) return undefined;
   const tags = parseImageKeywordTags(raw);
   if (tags.length === 0) return undefined;

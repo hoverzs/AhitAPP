@@ -38,7 +38,7 @@ export function parseImageKeywordTags(raw: string | undefined): string[] {
     }
   }
 
-  return tags.slice(0, 5);
+  return tags.slice(0, 4);
 }
 
 export function suggestedKeywordTags(

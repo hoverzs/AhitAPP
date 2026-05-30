@@ -3,24 +3,27 @@ import { GEMINI_SYSTEM_PROMPT } from "./gemini-system-prompt";
 
 export const PLANNER_SHORT_RETRY_SUFFIX = `
 
-AZ ELŐZŐ VÁLASZ TÚL HOSSZÚ VOLT VAGY ÉRVÉNYTELEN JSON.
-Most még rövidebben: max. 500–600 szó, max. 3 rövid bekezdés az elmélkedésben, rövidebb imádság.
-Csak a 6 mezős JSON — title, scripture, category, excerpt, devotional, imageKeywords. Semmi más szöveg.`;
+AZ ELŐZŐ VÁLASZ TÚL HOSSZÚ VAGY HIBÁS JSON.
+Most max. 350–450 szó, max. 3 rövid bekezdés, rövidebb imádság.
+Csak a 6 mezős JSON. imageKeywords: max. 4 angol szó.`;
 
-export function buildDynamicPlannerSystemPrompt(): string {
-  return GEMINI_SYSTEM_PROMPT;
+export function buildDynamicPlannerSystemPrompt(shortened?: boolean): string {
+  if (!shortened) return GEMINI_SYSTEM_PROMPT;
+  return `${GEMINI_SYSTEM_PROMPT}\n\nMOST EXTRA RÖVIDEN: max. 350–450 szó, minél kevesebb token.`;
 }
 
 export function buildDynamicPlannerUserPrompt(
   memory: DevotionalMemory,
   options?: { shortened?: boolean }
 ): string {
+  const wordCap = options?.shortened ? "350–450" : "500–700";
+
   const base = `Generáld a ${memory.nextDayNumber}. nap áhítatát.
 
-Új bibliai vers és téma — még nem szerepelt:
+Új vers és téma (még nem szerepelt):
 ${memory.summaryForPrompt}
 
-Válasz: egyetlen érvényes JSON, pontosan 6 mezővel. Tömör legyen — max. 700–900 szó a devotional mezőben.`;
+Egyetlen érvényes JSON, 6 mező. Összesen max. ${wordCap} szó a devotional mezőben.`;
 
   if (options?.shortened) {
     return `${base}${PLANNER_SHORT_RETRY_SUFFIX}`;
