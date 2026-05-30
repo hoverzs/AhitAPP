@@ -74,6 +74,9 @@ export interface DynamicPlannedDay {
   excerpt?: string;
   facebookCopy?: string;
   imageKeywords?: string;
+  /** false = félbeszakadt / hiányos — ne published */
+  textComplete?: boolean;
+  generationReviewMessage?: string;
 }
 
 /** Gemini AI finomítás preview / apply payload */

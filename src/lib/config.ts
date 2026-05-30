@@ -5,12 +5,13 @@ export const GEMINI_PLANNER_MODEL = "gemini-2.5-flash";
 export const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
 
 /** 1. lépés — metadata JSON (rövid) */
-export const GEMINI_METADATA_MAX_OUTPUT_TOKENS = 512;
+export const GEMINI_METADATA_MAX_OUTPUT_TOKENS = 600;
 
 /** 2. lépés — áhítat markdown (plain text) */
-export const GEMINI_BODY_MAX_OUTPUT_TOKENS = 2048;
+export const GEMINI_BODY_MAX_OUTPUT_TOKENS = 2500;
 
-export const GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS = 1536;
+/** Retry — rövidebb prompt, magasabb token limit (lezárt szöveg). */
+export const GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS = 2500;
 
 /** Planner temperature */
 export const GEMINI_PLANNER_TEMPERATURE = 0.65;

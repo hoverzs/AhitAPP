@@ -12,6 +12,10 @@ import {
   truncateDevotionalMarkdown,
 } from "./devotional-markdown";
 import {
+  assessGeneratedDevotionalContent,
+  TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
+} from "./devotional-text-complete";
+import {
   BODY_SHORT_RETRY_SUFFIX,
   BODY_SYSTEM_PROMPT,
   buildBodyUserPrompt,
@@ -52,6 +56,7 @@ type PlannerLogEvent =
   | "body_token_overflow"
   | "body_retry"
   | "body_truncated"
+  | "body_incomplete"
   | "body_fallback"
   | "assemble_success"
   | "failure";
@@ -148,7 +153,13 @@ async function fetchMetadata(
 async function fetchDevotionalMarkdown(
   metadata: DevotionalMetadata,
   memory: DevotionalMemory
-): Promise<{ markdown: string; truncated: boolean; hitMaxTokens: boolean }> {
+): Promise<{
+  markdown: string;
+  truncated: boolean;
+  hitMaxTokens: boolean;
+  textComplete: boolean;
+  incompleteReasons: string[];
+}> {
   plannerLog("body_start", {
     dayNumber: memory.nextDayNumber,
     title: metadata.title,
@@ -208,7 +219,22 @@ async function fetchDevotionalMarkdown(
         });
       }
 
-      if (tokenCutoff && attempt < BODY_MAX_ATTEMPTS && !truncated) {
+      const assessment = assessGeneratedDevotionalContent(markdown, {
+        shortened,
+      });
+      const structurallyIncomplete =
+        truncated || tokenCutoff || !assessment.complete;
+
+      if (structurallyIncomplete) {
+        plannerLog("body_incomplete", {
+          attempt,
+          reasons: assessment.reasons,
+          truncated,
+          hitMaxTokens: tokenCutoff,
+        });
+      }
+
+      if (structurallyIncomplete && attempt < BODY_MAX_ATTEMPTS) {
         continue;
       }
 
@@ -216,9 +242,16 @@ async function fetchDevotionalMarkdown(
         attempt,
         chars: markdown.length,
         hitMaxTokens: tokenCutoff,
+        textComplete: assessment.complete && !truncated,
       });
 
-      return { markdown, truncated, hitMaxTokens: tokenCutoff };
+      return {
+        markdown,
+        truncated,
+        hitMaxTokens: tokenCutoff,
+        textComplete: assessment.complete && !truncated,
+        incompleteReasons: assessment.reasons,
+      };
     } catch (error) {
       logGeminiError(error, `body attempt ${attempt}`);
       if (attempt < BODY_MAX_ATTEMPTS && isRetriableGeminiResponseError(error)) {
@@ -232,18 +265,35 @@ async function fetchDevotionalMarkdown(
   if (lastRaw.trim()) {
     const cleaned = normalizeDevotionalMarkdownBody(stripMarkdownFences(lastRaw));
     const { markdown, truncated } = truncateDevotionalMarkdown(cleaned);
+    const assessment = assessGeneratedDevotionalContent(markdown, {
+      shortened: true,
+    });
     plannerLog("body_fallback", {
       reason: "partial_markdown_after_max_tokens",
       chars: markdown.length,
+      textComplete: assessment.complete && !truncated,
     });
-    return { markdown, truncated, hitMaxTokens };
+    return {
+      markdown,
+      truncated,
+      hitMaxTokens,
+      textComplete: assessment.complete && !truncated,
+      incompleteReasons: assessment.reasons,
+    };
   }
 
   const fallback = normalizeDevotionalMarkdownBody(
     `### Elmélkedés\n\n${metadata.excerpt}\n\nTovábbi elmélkedés: ${metadata.title}`
   );
+  const assessment = assessGeneratedDevotionalContent(fallback);
   plannerLog("body_fallback", { reason: "minimal_from_excerpt" });
-  return { markdown: fallback, truncated: false, hitMaxTokens };
+  return {
+    markdown: fallback,
+    truncated: false,
+    hitMaxTokens,
+    textComplete: assessment.complete,
+    incompleteReasons: assessment.reasons,
+  };
 }
 
 /**
@@ -259,10 +309,12 @@ export async function planAndGenerateNextDay(
 
   try {
     const metadata = await fetchMetadata(memory);
-    const { markdown: devotionalMarkdown } = await fetchDevotionalMarkdown(
-      metadata,
-      memory
-    );
+    const {
+      markdown: devotionalMarkdown,
+      textComplete,
+      incompleteReasons,
+      truncated,
+    } = await fetchDevotionalMarkdown(metadata, memory);
 
     const planned = assemblePlannedDayFromParts(
       {
@@ -276,7 +328,30 @@ export async function planAndGenerateNextDay(
       memory.nextDayNumber
     );
 
-    return finalizePlanned(planned, memory, { strategy: "two_step" });
+    const contentAssessment = assessGeneratedDevotionalContent(planned.content);
+    const complete =
+      textComplete && contentAssessment.complete && !truncated;
+
+    if (!complete) {
+      plannerLog("body_incomplete", {
+        phase: "assembled",
+        reasons: incompleteReasons.length
+          ? incompleteReasons
+          : contentAssessment.reasons,
+      });
+    }
+
+    return finalizePlanned(
+      {
+        ...planned,
+        textComplete: complete,
+        generationReviewMessage: complete
+          ? undefined
+          : TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
+      },
+      memory,
+      { strategy: "two_step", textComplete: complete }
+    );
   } catch (error) {
     if (
       error instanceof Error &&

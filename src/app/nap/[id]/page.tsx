@@ -4,7 +4,6 @@ import { ImageCredit } from "@/components/ImageCredit";
 import { DevotionalContent } from "@/components/devotional/DevotionalContent";
 import { hasAssignedDevotionalImage, resolveDevotionalDisplayImage } from "@/lib/image-assets";
 import { isPublicDevotional } from "@/lib/devotional-status";
-import { DEV_REVIEW_MODE } from "@/lib/dev-review";
 import type { Metadata } from "next";
 import { getDevotionalByDay } from "@/lib/devotionals";
 import { CopyButton } from "@/components/CopyButton";
@@ -51,7 +50,7 @@ export default async function DevotionalPage({ params }: PageProps) {
     notFound();
   }
 
-  if (DEV_REVIEW_MODE && !isPublicDevotional(devotional)) {
+  if (!isPublicDevotional(devotional)) {
     notFound();
   }
 

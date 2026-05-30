@@ -1,6 +1,7 @@
 import { readDevotionalsWithStatus } from "./devotionals";
 import { buildDevotionalMemory } from "./devotional-memory";
 import {
+  filterPublicDevotionals,
   isPendingReview,
   normalizeDevotional,
   statusLabelHu,
@@ -17,7 +18,7 @@ import { GEMINI_PLANNER_MODEL } from "./config";
 import { getLatestDevotional, getRecentDevotionals } from "./dashboard";
 import { resolveDisplayVerse, type DisplayVerse } from "./display-verse";
 import { STATIC_DISPLAY_VERSE } from "./fallbacks";
-import { filterPublicDevotionals } from "./devotional-status";
+import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import type { AdminDevotionalContext, AdminDevotionalListItem, Devotional } from "./types";
 import type { DevotionalMemory } from "./devotional-memory";
 
@@ -97,7 +98,18 @@ export function buildAdminDevotionalContext(
     .find((d) => isPendingReview(d.status));
 
   let reviewWarning: string | undefined;
-  if (DEV_REVIEW_MODE && pending) {
+
+  const truncatedPending = devotionals
+    .map(normalizeDevotional)
+    .find(
+      (d) =>
+        isPendingReview(d.status) &&
+        d.lastApiError === TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE
+    );
+
+  if (truncatedPending) {
+    reviewWarning = TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE;
+  } else if (DEV_REVIEW_MODE && pending) {
     reviewWarning = `A mai áhítat még nincs jóváhagyva (${statusLabelHu(pending.status)}). Fejlesztői módban nem generálunk további napokat.`;
   }
 

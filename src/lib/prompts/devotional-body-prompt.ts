@@ -26,8 +26,8 @@ export function buildBodyUserPrompt(
   options?: { shortened?: boolean }
 ): string {
   const lengthHint = options?.shortened
-    ? "Most rövidebben: max. 1500–1800 karakter, max. 3 rövid bekezdés az elmélkedésben."
-    : "A teljes szöveg kb. 2000–3000 karakter legyen.";
+    ? "Írj rövidebb, lezárt, 3 bekezdéses elmélkedést. Minden mondat legyen befejezett. Max. 1500–1800 karakter összesen."
+    : "A teljes szöveg kb. 2000–3000 karakter legyen. Minden mondat és bekezdés legyen lezárt.";
 
   return `Írd meg a mai áhítatot markdownban (NEM JSON).
 
@@ -43,5 +43,6 @@ ${lengthHint}`;
 
 export const BODY_SHORT_RETRY_SUFFIX = `
 
-AZ ELŐZŐ VÁLASZ TÚL HOSSZÚ VOLT.
-Most rövidebben: max. 1500 karakter, rövidebb bekezdések, rövidebb ima. Csak markdown, NEM JSON.`;
+AZ ELŐZŐ VÁLASZ NEM VOLT TELJES VAGY TÚL HOSSZÚ VOLT.
+Írj rövidebb, lezárt, 3 bekezdéses elmélkedést. Minden mondat legyen befejezett.
+Max. 1500–1800 karakter összesen. Rövid ima és egy kérdés is kell. Csak plain markdown, NEM JSON.`;

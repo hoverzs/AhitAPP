@@ -464,12 +464,19 @@ export function AdminDashboard({
           />
         )}
 
+        {context.reviewWarning && (
+          <AdminErrorAlert
+            title="Generálás figyelmeztetés"
+            message={context.reviewWarning}
+          />
+        )}
+
         {context.devReviewMode && (
           <div className="admin-banner-dev">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-900 mb-1">
               Fejlesztői ellenőrzési mód
             </p>
-            {context.reviewWarning ?? (
+            {context.reviewWarning ? null : (
               <>
                 Csak a mai / aktuális áhítat finomítható. Jóváhagyásig nincs
                 következő nap.

@@ -1,3 +1,4 @@
+import { isPublishableDevotionalContent } from "./devotional-text-complete";
 import type { Devotional, DevotionalStatus } from "./types";
 
 export const DEVOTIONAL_STATUSES: DevotionalStatus[] = [
@@ -56,9 +57,15 @@ export function normalizeDevotional(entry: Devotional): Devotional & {
   };
 }
 
-/** Nyilvános oldal: csak közzétett. */
+/** Nyilvános oldal: csak közzétett és teljes szövegű (nem félbeszakadt). */
 export function isPublicDevotional(entry: Devotional): boolean {
-  return normalizeDevotionalStatus(entry.status) === "published";
+  if (normalizeDevotionalStatus(entry.status) !== "published") {
+    return false;
+  }
+  if (!entry.content?.trim()) {
+    return false;
+  }
+  return isPublishableDevotionalContent(entry.content);
 }
 
 export function filterPublicDevotionals(devotionals: Devotional[]): Devotional[] {
