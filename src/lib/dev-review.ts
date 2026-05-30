@@ -19,7 +19,7 @@ export const AUTO_GENERATE_DAILY = envFlag("AUTO_GENERATE_DAILY", false);
 export const AUTO_PUBLISH_GENERATED = envFlag("AUTO_PUBLISH_GENERATED", true);
 
 export const PROMPT_VERSION =
-  process.env.PROMPT_VERSION?.trim() || "2026-05-devotional-v6-stable";
+  process.env.PROMPT_VERSION?.trim() || "2026-05-devotional-v7b-body-prompt";
 
 export function isCronGenerationEnabled(): boolean {
   if (isProductionDeployment()) return true;

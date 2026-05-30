@@ -1,44 +1,59 @@
 import {
-  GEMINI_PLANNER_MAX_OUTPUT_TOKENS,
+  GEMINI_BODY_MAX_OUTPUT_TOKENS,
+  GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS,
+  GEMINI_METADATA_MAX_OUTPUT_TOKENS,
   GEMINI_PLANNER_MODEL,
-  GEMINI_PLANNER_RETRY_MAX_OUTPUT_TOKENS,
   GEMINI_PLANNER_RETRY_TEMPERATURE,
   GEMINI_PLANNER_TEMPERATURE,
 } from "./config";
 import {
-  buildDynamicPlannerSystemPrompt,
-  buildDynamicPlannerUserPrompt,
-} from "./prompts/dynamic-planner-prompt";
+  normalizeDevotionalMarkdownBody,
+  stripMarkdownFences,
+  truncateDevotionalMarkdown,
+} from "./devotional-markdown";
+import {
+  BODY_SHORT_RETRY_SUFFIX,
+  BODY_SYSTEM_PROMPT,
+  buildBodyUserPrompt,
+} from "./prompts/devotional-body-prompt";
+import {
+  buildMetadataUserPrompt,
+  METADATA_SYSTEM_PROMPT,
+} from "./prompts/devotional-metadata-prompt";
 import type { DevotionalMemory } from "./devotional-memory";
 import { isVerseReferenceUsed, extractVerseReference } from "./devotional-memory";
 import type { DynamicPlannedDay } from "./types";
 import { logGeminiError } from "./gemini-client";
-import { buildFallbackPlannedDay } from "./gemini-planner-fallback";
+import {
+  assemblePlannedDayFromParts,
+  parseMetadataJson,
+  type DevotionalMetadata,
+} from "./planned-day-mapper";
 import {
   geminiGenerateContentRestDetailed,
   isGeminiResponseError,
   isRetriableGeminiResponseError,
   logRawGeminiResponse,
-  parseJsonFromModelText,
-  repairTruncatedJsonObject,
 } from "./gemini-fetch";
 import { toGeminiErrorDetails } from "./gemini-errors";
-import {
-  mapRawGeminiToPlannedDay,
-  type RawGeminiPlannedDay,
-} from "./planned-day-mapper";
 
 const LOG_PREFIX = "[planAndGenerateNextDay]";
-const MAX_ATTEMPTS = 2;
+const METADATA_MAX_ATTEMPTS = 2;
+const BODY_MAX_ATTEMPTS = 2;
 
 type PlannerLogEvent =
   | "start"
-  | "token_overflow"
-  | "invalid_json"
-  | "invalid_json_retry"
-  | "retry"
-  | "fallback_mode"
-  | "success"
+  | "metadata_start"
+  | "metadata_success"
+  | "metadata_invalid_json"
+  | "metadata_retry"
+  | "body_start"
+  | "body_success"
+  | "body_token_overflow"
+  | "body_retry"
+  | "body_truncated"
+  | "body_fallback"
+  | "assemble_success"
   | "failure";
 
 function plannerLog(
@@ -48,61 +63,6 @@ function plannerLog(
   const timestamp = new Date().toISOString();
   const payload = meta ? ` ${JSON.stringify(meta)}` : "";
   console.log(`${LOG_PREFIX} ${timestamp} — ${event}${payload}`);
-}
-
-function stripMarkdownJsonFences(text: string): string {
-  return text.replace(/```json|```/gi, "").trim();
-}
-
-function parsePlannerResponse(
-  raw: string,
-  expectedDay: number,
-  options?: { allowTruncatedRepair?: boolean }
-): DynamicPlannedDay {
-  const stripped = stripMarkdownJsonFences(raw);
-  const candidates = [stripped];
-
-  if (options?.allowTruncatedRepair) {
-    candidates.push(repairTruncatedJsonObject(stripped));
-  }
-
-  const start = stripped.indexOf("{");
-  const end = stripped.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    candidates.push(stripped.slice(start, end + 1));
-  }
-
-  let parsed: RawGeminiPlannedDay | undefined;
-  let lastError: unknown;
-
-  for (const candidate of candidates) {
-    try {
-      parsed = parseJsonFromModelText<RawGeminiPlannedDay>(candidate);
-      break;
-    } catch {
-      try {
-        parsed = JSON.parse(candidate) as RawGeminiPlannedDay;
-        break;
-      } catch (e2) {
-        lastError = e2;
-      }
-    }
-  }
-
-  if (!parsed) {
-    plannerLog("invalid_json", {
-      expectedDay,
-      preview: raw.slice(0, 300),
-      error: lastError instanceof Error ? lastError.message : "parse failed",
-    });
-    throw new Error(
-      lastError instanceof Error
-        ? `JSON feldolgozási hiba: ${lastError.message}`
-        : "A modell válasza nem értelmezhető JSON-ként."
-    );
-  }
-
-  return mapRawGeminiToPlannedDay(parsed, expectedDay);
 }
 
 function finalizePlanned(
@@ -118,7 +78,7 @@ function finalizePlanned(
     );
   }
 
-  plannerLog("success", {
+  plannerLog("assemble_success", {
     dayNumber: planned.dayNumber,
     title: planned.title,
     contentChars: planned.content.length,
@@ -128,42 +88,93 @@ function finalizePlanned(
   return planned;
 }
 
-/**
- * Planner: minimális JSON, maxOutputTokens 1200, max 2 retry, plain-text fallback.
- */
-export async function planAndGenerateNextDay(
+async function fetchMetadata(
   memory: DevotionalMemory
-): Promise<DynamicPlannedDay> {
-  let lastError: unknown;
-  let lastRaw = "";
+): Promise<DevotionalMetadata> {
+  plannerLog("metadata_start", { dayNumber: memory.nextDayNumber });
+  let lastMetadataError: unknown;
 
-  plannerLog("start", {
-    dayNumber: memory.nextDayNumber,
-    maxAttempts: MAX_ATTEMPTS,
-    maxOutputTokens: GEMINI_PLANNER_MAX_OUTPUT_TOKENS,
-    temperature: GEMINI_PLANNER_TEMPERATURE,
+  for (let attempt = 1; attempt <= METADATA_MAX_ATTEMPTS; attempt++) {
+    try {
+      const { text: raw } = await geminiGenerateContentRestDetailed({
+        model: GEMINI_PLANNER_MODEL,
+        systemInstruction: METADATA_SYSTEM_PROMPT,
+        userPrompt: buildMetadataUserPrompt(memory),
+        generationConfig: {
+          temperature: GEMINI_PLANNER_TEMPERATURE,
+          maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
+          responseMimeType: "application/json",
+        },
+        logContext: `planAndGenerateNextDay/metadata-${attempt}`,
+        maxAttempts: 1,
+      });
+
+      const metadata = parseMetadataJson(raw);
+
+      plannerLog("metadata_success", {
+        attempt,
+        title: metadata.title,
+        category: metadata.category,
+      });
+      return metadata;
+    } catch (error) {
+      lastMetadataError = error;
+      plannerLog("metadata_invalid_json", {
+        attempt,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (attempt < METADATA_MAX_ATTEMPTS) {
+        plannerLog("metadata_retry", { attempt });
+        continue;
+      }
+    }
+  }
+
+  plannerLog("body_fallback", {
+    phase: "metadata",
+    reason: "using_defaults",
+    error: lastMetadataError instanceof Error ? lastMetadataError.message : undefined,
   });
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  return {
+    title: `${memory.nextDayNumber}. nap áhítata`,
+    scripture: "Zsoltárok 23:1 — Az Úr az én pásztorom",
+    category: memory.usedCategories.at(-1) || "Békesség",
+    excerpt: "Egy rövid pillanat csendben Isten előtt.",
+    imageKeywords: "quiet path, soft light, still lake, dawn",
+  };
+}
+
+async function fetchDevotionalMarkdown(
+  metadata: DevotionalMetadata,
+  memory: DevotionalMemory
+): Promise<{ markdown: string; truncated: boolean; hitMaxTokens: boolean }> {
+  plannerLog("body_start", {
+    dayNumber: memory.nextDayNumber,
+    title: metadata.title,
+  });
+
+  let lastRaw = "";
+  let hitMaxTokens = false;
+
+  for (let attempt = 1; attempt <= BODY_MAX_ATTEMPTS; attempt++) {
     const shortened = attempt > 1;
-    const systemInstruction = buildDynamicPlannerSystemPrompt(shortened);
-    const userPrompt = buildDynamicPlannerUserPrompt(memory, { shortened });
+    const userPrompt =
+      buildBodyUserPrompt(metadata, { shortened }) +
+      (shortened ? BODY_SHORT_RETRY_SUFFIX : "");
 
     if (shortened) {
-      plannerLog("retry", {
-        attempt,
-        reason: lastError instanceof Error ? lastError.message : "previous_failure",
-      });
+      plannerLog("body_retry", { attempt });
     }
 
     try {
       const maxOutputTokens = shortened
-        ? GEMINI_PLANNER_RETRY_MAX_OUTPUT_TOKENS
-        : GEMINI_PLANNER_MAX_OUTPUT_TOKENS;
+        ? GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS
+        : GEMINI_BODY_MAX_OUTPUT_TOKENS;
 
       const { text: raw, finishReason } = await geminiGenerateContentRestDetailed({
         model: GEMINI_PLANNER_MODEL,
-        systemInstruction,
+        systemInstruction: BODY_SYSTEM_PROMPT,
         userPrompt,
         generationConfig: {
           temperature: shortened
@@ -171,117 +182,125 @@ export async function planAndGenerateNextDay(
             : GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens,
         },
-        logContext: `planAndGenerateNextDay/attempt-${attempt}`,
+        logContext: `planAndGenerateNextDay/body-${attempt}`,
         maxAttempts: 1,
       });
 
       lastRaw = raw;
-      const hitMaxTokens = finishReason === "MAX_TOKENS";
-
-      if (hitMaxTokens) {
-        plannerLog("token_overflow", {
+      const tokenCutoff = finishReason === "MAX_TOKENS";
+      if (tokenCutoff) {
+        hitMaxTokens = true;
+        plannerLog("body_token_overflow", {
           attempt,
-          finishReason,
           responseChars: raw.length,
           maxOutputTokens,
         });
       }
 
-      if (hitMaxTokens && attempt < MAX_ATTEMPTS) {
-        lastError = new Error("MAX_TOKENS");
+      const cleaned = normalizeDevotionalMarkdownBody(stripMarkdownFences(raw));
+      const { markdown, truncated } = truncateDevotionalMarkdown(cleaned);
+
+      if (truncated) {
+        plannerLog("body_truncated", {
+          attempt,
+          originalChars: cleaned.length,
+          finalChars: markdown.length,
+        });
+      }
+
+      if (tokenCutoff && attempt < BODY_MAX_ATTEMPTS && !truncated) {
         continue;
       }
 
-      try {
-        const planned = parsePlannerResponse(raw, memory.nextDayNumber, {
-          allowTruncatedRepair: hitMaxTokens,
-        });
-        return finalizePlanned(planned, memory, { attempt, mode: "json" });
-      } catch (parseError) {
-        if (attempt < MAX_ATTEMPTS) {
-          plannerLog("invalid_json_retry", {
-            attempt,
-            nextAttempt: attempt + 1,
-            error: parseError instanceof Error ? parseError.message : String(parseError),
-          });
-          lastError = parseError;
-          continue;
-        }
+      plannerLog("body_success", {
+        attempt,
+        chars: markdown.length,
+        hitMaxTokens: tokenCutoff,
+      });
 
-        if (hitMaxTokens) {
-          lastError = parseError;
-          break;
-        }
-        throw parseError;
-      }
+      return { markdown, truncated, hitMaxTokens: tokenCutoff };
     } catch (error) {
-      lastError = error;
-
-      if (
-        error instanceof Error &&
-        error.message.includes("szerepelt a múltban")
-      ) {
-        throw error;
-      }
-
-      logGeminiError(error, `planAndGenerateNextDay attempt ${attempt}`);
-
-      if (attempt < MAX_ATTEMPTS && isRetriableGeminiResponseError(error)) {
-        plannerLog("retry", {
-          attempt,
-          reason: error instanceof Error ? error.message : String(error),
-        });
+      logGeminiError(error, `body attempt ${attempt}`);
+      if (attempt < BODY_MAX_ATTEMPTS && isRetriableGeminiResponseError(error)) {
         continue;
       }
-
-      if (isGeminiResponseError(error)) {
-        plannerLog("failure", {
-          attempt,
-          code: error.issue,
-          message: error.message,
-        });
-        throw error;
-      }
-
-      break;
+      if (lastRaw.trim()) break;
+      throw error;
     }
   }
 
   if (lastRaw.trim()) {
-    plannerLog("fallback_mode", {
-      dayNumber: memory.nextDayNumber,
-      rawChars: lastRaw.length,
-      reason: lastError instanceof Error ? lastError.message : "exhausted_retries",
+    const cleaned = normalizeDevotionalMarkdownBody(stripMarkdownFences(lastRaw));
+    const { markdown, truncated } = truncateDevotionalMarkdown(cleaned);
+    plannerLog("body_fallback", {
+      reason: "partial_markdown_after_max_tokens",
+      chars: markdown.length,
     });
-
-    try {
-      const planned = buildFallbackPlannedDay(lastRaw, memory.nextDayNumber, {
-        categoryHint: memory.usedCategories.at(-1),
-      });
-      return finalizePlanned(planned, memory, { attempt: MAX_ATTEMPTS, mode: "fallback" });
-    } catch (fallbackError) {
-      plannerLog("failure", {
-        mode: "fallback",
-        error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
-      });
-    }
+    return { markdown, truncated, hitMaxTokens };
   }
 
-  logRawGeminiResponse(
-    "planAndGenerateNextDay/final-failure",
-    null,
-    lastError instanceof Error ? lastError.message : String(lastError)
+  const fallback = normalizeDevotionalMarkdownBody(
+    `### Elmélkedés\n\n${metadata.excerpt}\n\nTovábbi elmélkedés: ${metadata.title}`
   );
+  plannerLog("body_fallback", { reason: "minimal_from_excerpt" });
+  return { markdown: fallback, truncated: false, hitMaxTokens };
+}
 
-  plannerLog("failure", {
-    attempts: MAX_ATTEMPTS,
-    error: lastError instanceof Error ? lastError.message : String(lastError),
+/**
+ * Kétlépcsős generálás: (A) rövid metadata JSON → (B) plain markdown áhítat.
+ */
+export async function planAndGenerateNextDay(
+  memory: DevotionalMemory
+): Promise<DynamicPlannedDay> {
+  plannerLog("start", {
+    dayNumber: memory.nextDayNumber,
+    strategy: "two_step",
   });
 
-  if (isGeminiResponseError(lastError)) {
-    throw lastError;
-  }
+  try {
+    const metadata = await fetchMetadata(memory);
+    const { markdown: devotionalMarkdown } = await fetchDevotionalMarkdown(
+      metadata,
+      memory
+    );
 
-  const details = toGeminiErrorDetails(lastError);
-  throw new Error(details.message, { cause: lastError });
+    const planned = assemblePlannedDayFromParts(
+      {
+        title: metadata.title,
+        scripture: metadata.scripture,
+        category: metadata.category,
+        excerpt: metadata.excerpt,
+        devotionalMarkdown,
+        imageKeywords: metadata.imageKeywords,
+      },
+      memory.nextDayNumber
+    );
+
+    return finalizePlanned(planned, memory, { strategy: "two_step" });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("szerepelt a múltban")
+    ) {
+      throw error;
+    }
+
+    logGeminiError(error, "planAndGenerateNextDay");
+    logRawGeminiResponse(
+      "planAndGenerateNextDay/final-failure",
+      null,
+      error instanceof Error ? error.message : String(error)
+    );
+
+    plannerLog("failure", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    if (isGeminiResponseError(error)) {
+      throw error;
+    }
+
+    const details = toGeminiErrorDetails(error);
+    throw new Error(details.message, { cause: error });
+  }
 }
