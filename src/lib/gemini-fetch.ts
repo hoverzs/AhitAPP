@@ -328,7 +328,9 @@ export async function geminiGenerateContentRestDetailed(params: {
         responseMimeType: base.responseMimeType,
         responseSchema: base.responseSchema,
       });
-      userPrompt = `${params.userPrompt}\n\nReturn compact JSON only. Shorter content field.`;
+      if (base.responseMimeType === "application/json") {
+        userPrompt = `${params.userPrompt}\n\nReturn compact JSON only. Shorter content field.`;
+      }
       console.warn(`[${context}] Retrying generateContent (attempt ${attempt}).`);
     }
 

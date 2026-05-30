@@ -6,13 +6,14 @@ import {
   GEMINI_PLANNER_RETRY_TEMPERATURE,
   GEMINI_PLANNER_TEMPERATURE,
 } from "./config";
+import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+import { logDevotionalGenerationDiagnostics } from "./devotional-generation-log";
 import {
   normalizeDevotionalMarkdownBody,
   stripMarkdownFences,
-  truncateDevotionalMarkdown,
 } from "./devotional-markdown";
 import {
-  assessGeneratedDevotionalContent,
+  assessRawDevotionalMarkdown,
   TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
 } from "./devotional-text-complete";
 import {
@@ -39,7 +40,11 @@ import {
   isRetriableGeminiResponseError,
   logRawGeminiResponse,
 } from "./gemini-fetch";
+import { isGeminiOutputTruncated } from "./gemini-response";
 import { toGeminiErrorDetails } from "./gemini-errors";
+
+/** Elmélkedés + teljes áhítat markdown — plain text, nem JSON. */
+const BODY_SOURCE_FUNCTION = "fetchDevotionalMarkdown";
 
 const LOG_PREFIX = "[planAndGenerateNextDay]";
 const METADATA_MAX_ATTEMPTS = 2;
@@ -55,7 +60,6 @@ type PlannerLogEvent =
   | "body_success"
   | "body_token_overflow"
   | "body_retry"
-  | "body_truncated"
   | "body_incomplete"
   | "body_fallback"
   | "assemble_success"
@@ -120,6 +124,7 @@ async function fetchMetadata(
         attempt,
         title: metadata.title,
         category: metadata.category,
+        maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
       });
       return metadata;
     } catch (error) {
@@ -150,39 +155,49 @@ async function fetchMetadata(
   };
 }
 
+/**
+ * 2. lépés: teljes áhítat plain markdown (### Elmélkedés, ima, kérdés).
+ * Token limit: GEMINI_BODY_MAX_OUTPUT_TOKENS (2500).
+ */
 async function fetchDevotionalMarkdown(
   metadata: DevotionalMetadata,
   memory: DevotionalMemory
 ): Promise<{
   markdown: string;
-  truncated: boolean;
   hitMaxTokens: boolean;
   textComplete: boolean;
   incompleteReasons: string[];
+  generationDiagnostics: NonNullable<DynamicPlannedDay["generationDiagnostics"]>;
 }> {
   plannerLog("body_start", {
+    sourceFunction: BODY_SOURCE_FUNCTION,
     dayNumber: memory.nextDayNumber,
     title: metadata.title,
+    maxOutputTokens: GEMINI_BODY_MAX_OUTPUT_TOKENS,
   });
 
   let lastRaw = "";
-  let hitMaxTokens = false;
+  let lastFinishReason = "UNKNOWN";
+  let lastMaxOutputTokens = GEMINI_BODY_MAX_OUTPUT_TOKENS;
+  let retryOccurred = false;
 
   for (let attempt = 1; attempt <= BODY_MAX_ATTEMPTS; attempt++) {
     const shortened = attempt > 1;
+    if (shortened) {
+      retryOccurred = true;
+      plannerLog("body_retry", { attempt, sourceFunction: BODY_SOURCE_FUNCTION });
+    }
+
     const userPrompt =
       buildBodyUserPrompt(metadata, { shortened }) +
       (shortened ? BODY_SHORT_RETRY_SUFFIX : "");
 
-    if (shortened) {
-      plannerLog("body_retry", { attempt });
-    }
+    const maxOutputTokens = shortened
+      ? GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS
+      : GEMINI_BODY_MAX_OUTPUT_TOKENS;
+    lastMaxOutputTokens = maxOutputTokens;
 
     try {
-      const maxOutputTokens = shortened
-        ? GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS
-        : GEMINI_BODY_MAX_OUTPUT_TOKENS;
-
       const { text: raw, finishReason } = await geminiGenerateContentRestDetailed({
         model: GEMINI_PLANNER_MODEL,
         systemInstruction: BODY_SYSTEM_PROMPT,
@@ -193,68 +208,90 @@ async function fetchDevotionalMarkdown(
             : GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens,
         },
-        logContext: `planAndGenerateNextDay/body-${attempt}`,
+        logContext: `${BODY_SOURCE_FUNCTION}/attempt-${attempt}`,
         maxAttempts: 1,
       });
 
       lastRaw = raw;
-      const tokenCutoff = finishReason === "MAX_TOKENS";
+      lastFinishReason = finishReason;
+
+      const stripped = stripMarkdownFences(raw);
+      const parsed = parseTolerantDevotionalMarkdown(stripped, { log: false });
+      const tokenCutoff = isGeminiOutputTruncated(finishReason);
+
       if (tokenCutoff) {
-        hitMaxTokens = true;
         plannerLog("body_token_overflow", {
+          sourceFunction: BODY_SOURCE_FUNCTION,
           attempt,
+          finishReason,
           responseChars: raw.length,
           maxOutputTokens,
         });
       }
 
-      const cleaned = normalizeDevotionalMarkdownBody(stripMarkdownFences(raw));
-      const { markdown, truncated } = truncateDevotionalMarkdown(cleaned);
-
-      if (truncated) {
-        plannerLog("body_truncated", {
-          attempt,
-          originalChars: cleaned.length,
-          finalChars: markdown.length,
-        });
-      }
-
-      const assessment = assessGeneratedDevotionalContent(markdown, {
+      const assessment = assessRawDevotionalMarkdown(stripped, {
         shortened,
+        finishReason,
       });
-      const structurallyIncomplete =
-        truncated || tokenCutoff || !assessment.complete;
 
-      if (structurallyIncomplete) {
+      logDevotionalGenerationDiagnostics({
+        sourceFunction: BODY_SOURCE_FUNCTION,
+        maxOutputTokens,
+        finishReason,
+        devotionalMarkdownLength: stripped.length,
+        meditationLength: parsed.devotional.length,
+        retryOccurred,
+        attempt,
+        textComplete: assessment.complete,
+        incompleteReasons: assessment.reasons,
+      });
+
+      if (!assessment.complete) {
         plannerLog("body_incomplete", {
+          sourceFunction: BODY_SOURCE_FUNCTION,
           attempt,
+          finishReason,
           reasons: assessment.reasons,
-          truncated,
-          hitMaxTokens: tokenCutoff,
+          maxOutputTokens,
         });
       }
 
-      if (structurallyIncomplete && attempt < BODY_MAX_ATTEMPTS) {
+      if (!assessment.complete && attempt < BODY_MAX_ATTEMPTS) {
         continue;
       }
 
+      const markdown = normalizeDevotionalMarkdownBody(stripped);
+
       plannerLog("body_success", {
+        sourceFunction: BODY_SOURCE_FUNCTION,
         attempt,
         chars: markdown.length,
-        hitMaxTokens: tokenCutoff,
-        textComplete: assessment.complete && !truncated,
+        finishReason,
+        maxOutputTokens,
+        textComplete: assessment.complete,
+        retryOccurred,
       });
+
+      const diagnostics = {
+        sourceFunction: BODY_SOURCE_FUNCTION,
+        maxOutputTokens,
+        finishReason,
+        devotionalMarkdownLength: stripped.length,
+        meditationLength: parsed.devotional.length,
+        retryOccurred,
+      };
 
       return {
         markdown,
-        truncated,
         hitMaxTokens: tokenCutoff,
-        textComplete: assessment.complete && !truncated,
+        textComplete: assessment.complete,
         incompleteReasons: assessment.reasons,
+        generationDiagnostics: diagnostics,
       };
     } catch (error) {
-      logGeminiError(error, `body attempt ${attempt}`);
+      logGeminiError(error, `${BODY_SOURCE_FUNCTION} attempt ${attempt}`);
       if (attempt < BODY_MAX_ATTEMPTS && isRetriableGeminiResponseError(error)) {
+        retryOccurred = true;
         continue;
       }
       if (lastRaw.trim()) break;
@@ -263,36 +300,71 @@ async function fetchDevotionalMarkdown(
   }
 
   if (lastRaw.trim()) {
-    const cleaned = normalizeDevotionalMarkdownBody(stripMarkdownFences(lastRaw));
-    const { markdown, truncated } = truncateDevotionalMarkdown(cleaned);
-    const assessment = assessGeneratedDevotionalContent(markdown, {
+    const stripped = stripMarkdownFences(lastRaw);
+    const parsed = parseTolerantDevotionalMarkdown(stripped, { log: false });
+    const assessment = assessRawDevotionalMarkdown(stripped, {
       shortened: true,
+      finishReason: lastFinishReason,
     });
+    const markdown = normalizeDevotionalMarkdownBody(stripped);
+
+    logDevotionalGenerationDiagnostics({
+      sourceFunction: BODY_SOURCE_FUNCTION,
+      maxOutputTokens: lastMaxOutputTokens,
+      finishReason: lastFinishReason,
+      devotionalMarkdownLength: stripped.length,
+      meditationLength: parsed.devotional.length,
+      retryOccurred,
+      attempt: BODY_MAX_ATTEMPTS,
+      textComplete: assessment.complete,
+      incompleteReasons: assessment.reasons,
+    });
+
     plannerLog("body_fallback", {
-      reason: "partial_markdown_after_max_tokens",
+      sourceFunction: BODY_SOURCE_FUNCTION,
+      reason: "partial_markdown_after_retries",
+      finishReason: lastFinishReason,
       chars: markdown.length,
-      textComplete: assessment.complete && !truncated,
+      textComplete: assessment.complete,
     });
+
     return {
       markdown,
-      truncated,
-      hitMaxTokens,
-      textComplete: assessment.complete && !truncated,
+      hitMaxTokens: isGeminiOutputTruncated(lastFinishReason),
+      textComplete: assessment.complete,
       incompleteReasons: assessment.reasons,
+      generationDiagnostics: {
+        sourceFunction: BODY_SOURCE_FUNCTION,
+        maxOutputTokens: lastMaxOutputTokens,
+        finishReason: lastFinishReason,
+        devotionalMarkdownLength: stripped.length,
+        meditationLength: parsed.devotional.length,
+        retryOccurred,
+      },
     };
   }
 
   const fallback = normalizeDevotionalMarkdownBody(
     `### Elmélkedés\n\n${metadata.excerpt}\n\nTovábbi elmélkedés: ${metadata.title}`
   );
-  const assessment = assessGeneratedDevotionalContent(fallback);
-  plannerLog("body_fallback", { reason: "minimal_from_excerpt" });
+  plannerLog("body_fallback", {
+    sourceFunction: BODY_SOURCE_FUNCTION,
+    reason: "minimal_from_excerpt",
+  });
+
   return {
     markdown: fallback,
-    truncated: false,
-    hitMaxTokens,
-    textComplete: assessment.complete,
-    incompleteReasons: assessment.reasons,
+    hitMaxTokens: false,
+    textComplete: false,
+    incompleteReasons: ["empty_gemini_response"],
+    generationDiagnostics: {
+      sourceFunction: BODY_SOURCE_FUNCTION,
+      maxOutputTokens: lastMaxOutputTokens,
+      finishReason: lastFinishReason,
+      devotionalMarkdownLength: 0,
+      meditationLength: 0,
+      retryOccurred,
+    },
   };
 }
 
@@ -305,6 +377,7 @@ export async function planAndGenerateNextDay(
   plannerLog("start", {
     dayNumber: memory.nextDayNumber,
     strategy: "two_step",
+    bodyGenerator: BODY_SOURCE_FUNCTION,
   });
 
   try {
@@ -313,7 +386,7 @@ export async function planAndGenerateNextDay(
       markdown: devotionalMarkdown,
       textComplete,
       incompleteReasons,
-      truncated,
+      generationDiagnostics,
     } = await fetchDevotionalMarkdown(metadata, memory);
 
     const planned = assemblePlannedDayFromParts(
@@ -328,16 +401,14 @@ export async function planAndGenerateNextDay(
       memory.nextDayNumber
     );
 
-    const contentAssessment = assessGeneratedDevotionalContent(planned.content);
-    const complete =
-      textComplete && contentAssessment.complete && !truncated;
+    const complete = textComplete;
 
     if (!complete) {
       plannerLog("body_incomplete", {
-        phase: "assembled",
-        reasons: incompleteReasons.length
-          ? incompleteReasons
-          : contentAssessment.reasons,
+        phase: "pre_save",
+        sourceFunction: BODY_SOURCE_FUNCTION,
+        reasons: incompleteReasons,
+        finishReason: generationDiagnostics.finishReason,
       });
     }
 
@@ -348,9 +419,16 @@ export async function planAndGenerateNextDay(
         generationReviewMessage: complete
           ? undefined
           : TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
+        generationDiagnostics,
       },
       memory,
-      { strategy: "two_step", textComplete: complete }
+      {
+        strategy: "two_step",
+        textComplete: complete,
+        finishReason: generationDiagnostics.finishReason,
+        maxOutputTokens: generationDiagnostics.maxOutputTokens,
+        retryOccurred: generationDiagnostics.retryOccurred,
+      }
     );
   } catch (error) {
     if (

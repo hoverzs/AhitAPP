@@ -206,3 +206,8 @@ export function extractGeminiCandidateText(
 
   return { text, finishReason };
 }
+
+/** Gemini levágta a kimenetet tokenlimit miatt. */
+export function isGeminiOutputTruncated(finishReason: string): boolean {
+  return finishReason === "MAX_TOKENS" || finishReason === "LENGTH";
+}

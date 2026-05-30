@@ -1,7 +1,4 @@
-import {
-  normalizeDevotionalMarkdownBody,
-  truncateDevotionalMarkdown,
-} from "./devotional-markdown";
+import { normalizeDevotionalMarkdownBody } from "./devotional-markdown";
 import { parseImageKeywordTags } from "./image-keywords";
 import type { DynamicPlannedDay } from "./types";
 export interface DevotionalMetadata {
@@ -92,14 +89,10 @@ export function assemblePlannedDayFromParts(
   parts: DevotionalGenerationParts,
   expectedDay: number
 ): DynamicPlannedDay {
-  const { markdown, truncated } = truncateDevotionalMarkdown(parts.devotionalMarkdown);
-  if (truncated) {
-    console.info(
-      `[assemblePlannedDayFromParts] Markdown truncated to fit ${markdown.length} chars`
-    );
-  }
-  const normalizedMarkdown = normalizeDevotionalMarkdownBody(markdown);
-  const content = assembleDevotionalContent(parts.scripture, normalizedMarkdown);
+  const content = assembleDevotionalContent(
+    parts.scripture,
+    parts.devotionalMarkdown
+  );
   const excerpt = parts.excerpt.trim() || parts.title;
 
   return {

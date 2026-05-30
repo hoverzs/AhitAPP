@@ -1,4 +1,5 @@
 import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+import { isGeminiOutputTruncated } from "./gemini-response";
 
 /** Admin figyelmeztetés — félbeszakadt generálás. */
 export const TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE =
@@ -89,18 +90,30 @@ function endsWithTruncatedEllipsis(text: string): boolean {
 export interface AssessDevotionalContentOptions {
   /** Rövidebb retry után alacsonyabb minimum. */
   shortened?: boolean;
+  /** Gemini finishReason — MAX_TOKENS / LENGTH → hiányos. */
+  finishReason?: string;
 }
 
 /**
- * Generált markdown teljesség — elmélkedés, ima, kérdés.
+ * Nyers Gemini markdown — normalize ELŐTT (nem injektál default imát/kérdést).
  */
-export function assessGeneratedDevotionalContent(
-  content: string,
+export function assessRawDevotionalMarkdown(
+  rawMarkdown: string,
   options?: AssessDevotionalContentOptions
 ): DevotionalContentAssessment {
-  const parsed = parseTolerantDevotionalMarkdown(content, { log: false });
-  const minMeditation = options?.shortened ? 600 : 800;
+  const stripped = rawMarkdown.trim();
   const reasons: string[] = [];
+
+  if (!stripped) {
+    return { complete: false, reasons: ["empty_response"] };
+  }
+
+  if (options?.finishReason && isGeminiOutputTruncated(options.finishReason)) {
+    reasons.push("gemini_token_cutoff");
+  }
+
+  const parsed = parseTolerantDevotionalMarkdown(stripped, { log: false });
+  const minMeditation = options?.shortened ? 450 : 800;
 
   if (!isCompleteText(parsed.devotional, { minChars: minMeditation })) {
     reasons.push("incomplete_meditation");
@@ -121,6 +134,16 @@ export function assessGeneratedDevotionalContent(
   }
 
   return { complete: reasons.length === 0, reasons };
+}
+
+/**
+ * Generált markdown teljesség — elmélkedés, ima, kérdés (normalize utáni content).
+ */
+export function assessGeneratedDevotionalContent(
+  content: string,
+  options?: AssessDevotionalContentOptions
+): DevotionalContentAssessment {
+  return assessRawDevotionalMarkdown(content, options);
 }
 
 /** Nyilvános megjelenítéshez — published + teljes szöveg. */

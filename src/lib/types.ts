@@ -77,6 +77,14 @@ export interface DynamicPlannedDay {
   /** false = félbeszakadt / hiányos — ne published */
   textComplete?: boolean;
   generationReviewMessage?: string;
+  generationDiagnostics?: {
+    sourceFunction: string;
+    maxOutputTokens: number;
+    finishReason: string;
+    devotionalMarkdownLength: number;
+    meditationLength: number;
+    retryOccurred: boolean;
+  };
 }
 
 /** Gemini AI finomítás preview / apply payload */
