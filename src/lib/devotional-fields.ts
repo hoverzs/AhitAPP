@@ -1,5 +1,5 @@
 import { parseDevotionalSections } from "./devotional-sections";
-import { formatVerseAsBlockquote } from "./devotional-sections";
+import { deduplicateScripture } from "./scripture-dedup";
 import type { Devotional } from "./types";
 
 /** Markdown jelek eltávolítása mező tároláshoz */
@@ -98,15 +98,14 @@ export function buildContentFromEditableFields(
 export function buildFullDevotionalFromEditable(
   fields: EditableDevotionalFields
 ): { verse: string; content: string; prayer: string; reflectionQuestion: string } {
-  const alapigeBlock = fields.verse.trim()
-    ? `### Alapige\n\n${formatVerseAsBlockquote(fields.verse.trim())}`
-    : "";
-
+  const verse = fields.verse.trim();
   const body = buildContentFromEditableFields(fields);
-  const content = [alapigeBlock, body].filter(Boolean).join("\n\n");
+  const content = verse
+    ? deduplicateScripture(verse, body).markdown
+    : body;
 
   return {
-    verse: fields.verse.trim(),
+    verse,
     content,
     prayer: plainTextFromMarkdown(fields.prayer),
     reflectionQuestion: plainTextFromMarkdown(fields.reflectionQuestion),

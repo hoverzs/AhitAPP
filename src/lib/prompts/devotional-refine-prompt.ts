@@ -14,7 +14,9 @@ SZABÁLYOK:
 - Ne írd újra teljesen más témára — finomítsd a meglévőt.
 - A stílus: lelki, meditatív, közérthető, személyes, nem prédikációszerű, nem moralizáló.
 - Rövid bekezdések, mobilon olvasható.
-- A fontos mondatokat emeld ki **félkövérrel**, ahol indokolt.
+- Max. 2–3 **félkövér** kiemelés az egész áhítatban; legfeljebb 1 *dőlt* reflexív mondat.
+- Blockquote (>) csak rövid idézethez; ne használj listát, HTML-t, kódblokkot.
+- A ** és * jelek mindig párosítsd — ne maradjon nyers markdown a szövegben.
 - Ne használj Unicode „szépített” betűket.
 
 KIMENET — egyetlen érvényes JSON objektum, markdown kódblokkok NÉLKÜL:

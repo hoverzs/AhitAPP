@@ -1,24 +1,31 @@
 import { notFound } from "next/navigation";
 import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
 import { isPublicDevotional } from "@/lib/devotional-status";
-import type { Metadata } from "next";
-import { getDevotionalByDay } from "@/lib/devotionals";
-import { CopyButton } from "@/components/CopyButton";
-import { formatDevotionalForFacebook, getPublicDevotionalUrl } from "@/lib/facebook";
+import { getDevotionalByDate } from "@/lib/devotionals";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
+import type { Metadata } from "next";
+import { CopyButton } from "@/components/CopyButton";
+import {
+  formatDevotionalForFacebook,
+  getPublicDevotionalUrl,
+} from "@/lib/facebook";
 
 export const dynamic = "force-dynamic";
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 interface PageProps {
-  params: Promise<{ id: string }>;
+  params: Promise<{ date: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { id } = await params;
-  const dayNumber = Number(id);
-  const devotional = await getDevotionalByDay(dayNumber);
+  const { date } = await params;
+  if (!DATE_RE.test(date)) {
+    return { title: "Nem található" };
+  }
 
-  if (!devotional) {
+  const devotional = await getDevotionalByDate(date);
+  if (!devotional || !isPublicDevotional(devotional)) {
     return { title: "Nem található" };
   }
 
@@ -35,15 +42,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function DevotionalPage({ params }: PageProps) {
-  const { id } = await params;
-  const dayNumber = Number(id);
+export default async function DevotionalByDatePage({ params }: PageProps) {
+  const { date } = await params;
 
-  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
+  if (!DATE_RE.test(date)) {
     notFound();
   }
 
-  const devotional = await getDevotionalByDay(dayNumber);
+  const devotional = await getDevotionalByDate(date);
   if (!devotional) {
     notFound();
   }
@@ -52,7 +58,7 @@ export default async function DevotionalPage({ params }: PageProps) {
     notFound();
   }
 
-  const publicUrl = getPublicDevotionalUrl(dayNumber);
+  const publicUrl = getPublicDevotionalUrl(devotional.dayNumber);
   const facebookText = formatDevotionalForFacebook(devotional, publicUrl);
   const facebookShort = devotional.facebookCopy?.trim();
 

@@ -10,7 +10,15 @@ interface DevotionalContentProps {
   verse?: string;
 }
 
-function DevotionalSectionCard({ section }: { section: DevotionalSection }) {
+export function getDevotionalSections(content: string, verse?: string) {
+  return parseDevotionalSections(content, {
+    verse,
+    scripture: verse,
+    prependVerseAsAlapige: Boolean(verse?.trim()),
+  });
+}
+
+export function DevotionalSectionCard({ section }: { section: DevotionalSection }) {
   const isAlapige = section.id === "alapige";
   const isKerdes = section.id === "kerdes";
 
@@ -32,17 +40,14 @@ function DevotionalSectionCard({ section }: { section: DevotionalSection }) {
           {section.title}
         </h2>
       </header>
-      <DevotionalMarkdown source={section.body} />
+      <DevotionalMarkdown source={section.body} sectionId={section.id} />
     </section>
   );
 }
 
-/** Formázott áhítat — markdown szekciók + ikonok */
+/** Admin / egyszerű stack — minden szekció egymás alatt. */
 export function DevotionalContent({ content, verse }: DevotionalContentProps) {
-  const sections = parseDevotionalSections(content, {
-    verse,
-    prependVerseAsAlapige: Boolean(verse?.trim()),
-  });
+  const sections = getDevotionalSections(content, verse);
 
   if (sections.length === 0) {
     return (

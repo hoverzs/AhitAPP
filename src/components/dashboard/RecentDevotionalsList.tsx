@@ -28,7 +28,7 @@ export function RecentDevotionalsList({ devotionals }: RecentDevotionalsListProp
             return (
               <li key={d.dayNumber}>
                 <Link
-                  href={`/nap/${d.dayNumber}`}
+                  href={d.date ? `/devotional/${d.date}` : `/nap/${d.dayNumber}`}
                   className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-200 hover:bg-amber-50/50 group"
                 >
                   <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-ivory-100/80 text-gold-600/80 text-xs font-semibold">

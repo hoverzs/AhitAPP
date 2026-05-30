@@ -1,9 +1,6 @@
 import Link from "next/link";
 import type { Devotional } from "@/lib/types";
-import { DevotionalContent } from "@/components/devotional/DevotionalContent";
-import { DevotionalIllustration } from "@/components/DevotionalIllustration";
-import { ImageCredit } from "@/components/ImageCredit";
-import { hasAssignedDevotionalImage } from "@/lib/image-assets";
+import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
 import { formatDevotionalDate } from "@/lib/devotional-excerpt";
 import { STATIC_EXCERPT } from "@/lib/fallbacks";
 
@@ -33,8 +30,8 @@ export function FeaturedTodayDevotional({ devotional }: FeaturedTodayDevotionalP
 
   return (
     <article className="editorial-feature" id="mai-ahitat">
-      <div className="editorial-feature-inner">
-        <header className="max-w-3xl mx-auto text-center lg:text-left lg:mx-0">
+      <div className="editorial-feature-inner editorial-feature-inner--article max-w-[840px]">
+        <header className="text-center mb-8 md:mb-10">
           <p className="editorial-eyebrow">
             Mai áhítat
             {dateLabel && (
@@ -54,33 +51,17 @@ export function FeaturedTodayDevotional({ devotional }: FeaturedTodayDevotionalP
           )}
         </header>
 
-        <div className="mt-10 lg:mt-12 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14 items-start">
-          <figure className="order-1 lg:order-2 m-0 lg:sticky lg:top-24">
-            <div className="relative aspect-[4/5] sm:aspect-[5/6] lg:aspect-[4/5] rounded-2xl overflow-hidden border border-ivory-200/80 shadow-[0_20px_50px_-20px_rgba(23,32,51,0.15)]">
-              <DevotionalIllustration
-                imageUrl={devotional.imageUrl}
-                alt={devotional.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 480px"
-                priority
-                allowFallback
-              />
-            </div>
-            <figcaption className="mt-3 text-center lg:text-left space-y-1">
-              <span className="block text-xs text-ink-muted/70">
-                {devotional.dayNumber}. nap
-              </span>
-              {hasAssignedDevotionalImage(devotional.imageUrl) && (
-                <ImageCredit devotional={devotional} className="text-center lg:text-left" />
-              )}
-            </figcaption>
-          </figure>
-
-          <div className="order-2 lg:order-1 editorial-full-content min-w-0">
-            <DevotionalContent content={devotional.content} verse={devotional.verse} />
-          </div>
-        </div>
+        <DevotionalArticleLayout
+          content={devotional.content}
+          verse={devotional.verse}
+          dayNumber={devotional.dayNumber}
+          title={devotional.title}
+          category={devotional.category}
+          imageUrl={devotional.imageUrl}
+          imageMeta={devotional}
+          showHeader={false}
+          priorityImage
+        />
       </div>
     </article>
   );

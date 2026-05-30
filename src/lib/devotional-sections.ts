@@ -1,4 +1,9 @@
 import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+import {
+  deduplicateScripture,
+  formatCanonicalScriptureBlockquote,
+  scripturesEquivalent,
+} from "./scripture-dedup";
 
 /** Szekció metaadat — cím normalizálás és ikon azonosító */
 export type DevotionalSectionId =
@@ -81,22 +86,35 @@ function resolveSectionTitle(id: DevotionalSectionId, headerLine: string): strin
  */
 export function parseDevotionalSections(
   content: string,
-  options?: { verse?: string; prependVerseAsAlapige?: boolean }
+  options?: {
+    verse?: string;
+    /** @deprecated Használd verse — ugyanaz mint devotional.scripture */
+    scripture?: string;
+    prependVerseAsAlapige?: boolean;
+  }
 ): DevotionalSection[] {
   const sections: DevotionalSection[] = [];
-  const trimmed = content.trim();
+  const canonicalScripture =
+    options?.scripture?.trim() || options?.verse?.trim() || "";
+  const useExternalScripture =
+    Boolean(canonicalScripture) &&
+    (options?.prependVerseAsAlapige !== false);
 
-  if (options?.prependVerseAsAlapige && options.verse?.trim()) {
-    const verseBody = formatVerseAsBlockquote(options.verse.trim());
+  const trimmed = useExternalScripture
+    ? deduplicateScripture(canonicalScripture, content).markdown
+    : content.trim();
+
+  if (useExternalScripture) {
+    const verseBody = formatCanonicalScriptureBlockquote(canonicalScripture);
     sections.push({
       id: "alapige",
       title: "Alapige",
-      body: verseBody,
+      body: verseBody || formatVerseAsBlockquote(canonicalScripture),
     });
   }
 
   if (!trimmed) {
-    return sections;
+    return enrichSectionsWithTolerantMeditation(content.trim(), sections);
   }
 
   const headerRegex = /^#{1,6}\s+(.+)$/gm;
@@ -121,9 +139,12 @@ export function parseDevotionalSections(
 
   if (preamble) {
     const alapige = sections.find((s) => s.id === "alapige");
-    if (alapige) {
+    const preambleIsDuplicate =
+      useExternalScripture && scripturesEquivalent(canonicalScripture, preamble);
+
+    if (alapige && !preambleIsDuplicate) {
       alapige.body = `${alapige.body}\n\n${preamble}`.trim();
-    } else {
+    } else if (!alapige && !preambleIsDuplicate) {
       sections.unshift({
         id: "alapige",
         title: "Alapige",
@@ -143,16 +164,26 @@ export function parseDevotionalSections(
     const id = resolveSectionId(headerText);
     const title = resolveSectionTitle(id, headerText);
 
-    if (id === "alapige" && sections.some((s) => s.id === "alapige")) {
-      const existing = sections.find((s) => s.id === "alapige")!;
-      existing.body = `${existing.body}\n\n${body}`.trim();
-      continue;
+    if (id === "alapige") {
+      if (useExternalScripture) {
+        continue;
+      }
+      if (sections.some((s) => s.id === "alapige")) {
+        const existing = sections.find((s) => s.id === "alapige")!;
+        if (!scripturesEquivalent(existing.body, body)) {
+          existing.body = `${existing.body}\n\n${body}`.trim();
+        }
+        continue;
+      }
     }
 
     sections.push({ id, title, body });
   }
 
-  return enrichSectionsWithTolerantMeditation(trimmed, sections);
+  return enrichSectionsWithTolerantMeditation(
+    useExternalScripture ? content.trim() : trimmed,
+    sections
+  );
 }
 
 /**

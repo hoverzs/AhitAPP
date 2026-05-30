@@ -19,6 +19,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
+    "rehype-sanitize": "^6.0.0",
     "undici": "^7.26.0"
   },
   "devDependencies": {

@@ -283,7 +283,7 @@ export function parseTolerantDevotionalMarkdown(
 /** Kanonikus markdown összeállítás — garantált nem üres Elmélkedés. */
 export function rebuildDevotionalMarkdown(
   parsed: ParsedDevotionalMarkdown,
-  options?: { scriptureFallback?: string }
+  options?: { scriptureFallback?: string; omitAlapigeInContent?: boolean }
 ): string {
   const parts: string[] = [];
 
@@ -298,7 +298,7 @@ export function rebuildDevotionalMarkdown(
       ? `> ${options.scriptureFallback.replace(/^>\s?/gm, "").trim()}`
       : "");
 
-  if (scriptureBody) {
+  if (scriptureBody && !options?.omitAlapigeInContent) {
     parts.push("### Alapige");
     parts.push("");
     parts.push(scriptureBody.startsWith(">") ? scriptureBody : `> ${scriptureBody}`);
@@ -343,5 +343,8 @@ export function ensureDevotionalMeditationInContent(
       .join("\n");
   }
 
-  return rebuildDevotionalMarkdown(parsed, { scriptureFallback: verse });
+  return rebuildDevotionalMarkdown(parsed, {
+    scriptureFallback: verse,
+    omitAlapigeInContent: Boolean(verse?.trim()),
+  });
 }

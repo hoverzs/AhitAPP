@@ -3,6 +3,7 @@ import {
   parseTolerantDevotionalMarkdown,
   rebuildDevotionalMarkdown,
 } from "./devotional-body-parser";
+import { deduplicateScripture } from "./scripture-dedup";
 
 export const DEVOTIONAL_MARKDOWN_MAX_CHARS = 3000;
 
@@ -50,9 +51,21 @@ export function truncateDevotionalMarkdown(
  */
 export function normalizeDevotionalMarkdownBody(
   raw: string,
-  options?: { defaultTitle?: string; scriptureFallback?: string }
+  options?: {
+    defaultTitle?: string;
+    scriptureFallback?: string;
+    /** verse/scripture külön mezőben — ne kerüljön ### Alapige a contentbe */
+    omitAlapigeInContent?: boolean;
+  }
 ): string {
-  const stripped = stripMarkdownFences(raw).trim();
+  const omitAlapige =
+    options?.omitAlapigeInContent ?? Boolean(options?.scriptureFallback?.trim());
+
+  let stripped = stripMarkdownFences(raw).trim();
+  if (options?.scriptureFallback?.trim()) {
+    stripped = deduplicateScripture(options.scriptureFallback, stripped).markdown;
+  }
+
   if (!stripped) {
     return rebuildDevotionalMarkdown(
       parseTolerantDevotionalMarkdown(DEFAULT_MEDITATION_FALLBACK(), {
@@ -76,6 +89,7 @@ export function normalizeDevotionalMarkdownBody(
 
   return rebuildDevotionalMarkdown(parsed, {
     scriptureFallback: options?.scriptureFallback,
+    omitAlapigeInContent: omitAlapige,
   });
 }
 

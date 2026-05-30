@@ -82,6 +82,7 @@ export function assembleDevotionalContent(
 ): string {
   return normalizeDevotionalMarkdownBody(devotionalMarkdown, {
     scriptureFallback: scripture,
+    omitAlapigeInContent: true,
   });
 }
 

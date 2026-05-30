@@ -1,17 +1,17 @@
 import { redirect } from "next/navigation";
-import { readDevotionals } from "@/lib/devotionals";
-import { getLatestDevotional } from "@/lib/dashboard";
-import { filterPublicDevotionals } from "@/lib/devotional-status";
+import { getDevotionalByDate } from "@/lib/devotionals";
+import { getTodayDateIso } from "@/lib/devotional-calendar";
+import { isPublicDevotional } from "@/lib/devotional-status";
 
 export const dynamic = "force-dynamic";
 
 export default async function MaiPage() {
-  const devotionals = filterPublicDevotionals(await readDevotionals());
-  const latest = getLatestDevotional(devotionals);
+  const todayIso = getTodayDateIso();
+  const devotional = await getDevotionalByDate(todayIso);
 
-  if (latest) {
-    redirect(`/nap/${latest.dayNumber}`);
+  if (devotional && isPublicDevotional(devotional)) {
+    redirect(`/devotional/${todayIso}`);
   }
 
-  redirect("/");
+  redirect("/#mai-ahitat");
 }
