@@ -68,6 +68,8 @@ export function AdminDashboard({
 }: AdminDashboardProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [todayCronLoading, setTodayCronLoading] = useState(false);
+  const [todayCronNotice, setTodayCronNotice] = useState<string | null>(null);
   const [regenerateLoading, setRegenerateLoading] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [pingLoading, setPingLoading] = useState(false);
@@ -179,6 +181,75 @@ export function AdminDashboard({
       });
     } finally {
       setPingLoading(false);
+    }
+  }
+
+  async function handleGenerateTodayCron() {
+    setTodayCronLoading(true);
+    setError(null);
+    setToast(null);
+    setTodayCronNotice(null);
+
+    try {
+      const res = await fetch("/api/cron/generate-devotional", { method: "POST" });
+      const data = (await res.json()) as ApiErrorPayload & {
+        success?: boolean;
+        skipped?: boolean;
+        created?: boolean;
+        message?: string;
+        devotional?: {
+          dayNumber: number;
+          date: string;
+          title: string;
+          status?: string;
+        };
+      };
+
+      if (!res.ok || !data.success) {
+        const friendlyError = data.code
+          ? `${getGeminiErrorTitle(data.code)}. Próbáld újra később, vagy ellenőrizd az API beállításokat.`
+          : (data.error ?? "A mai áhítat generálása sikertelen.");
+        setError({
+          error: friendlyError,
+          hint:
+            data.hint ??
+            (data.code === "NETWORK" || data.code === "TLS_CERTIFICATE"
+              ? "Ellenőrizd a hálózati kapcsolatot, majd próbáld újra."
+              : data.code === "API_KEY"
+                ? "Ellenőrizd a GEMINI_API_KEY környezeti változót."
+                : data.code
+                  ? "Ha a hiba tartós, nézd meg a szerver naplókat."
+                  : undefined),
+          code: data.code,
+        });
+        return;
+      }
+
+      if (data.skipped) {
+        setTodayCronNotice(
+          data.message ??
+            "A mai napra már van áhítat. Használd az újragenerálás gombot, ha módosítani szeretnéd."
+        );
+        if (data.devotional?.dayNumber) {
+          await refreshFromServer();
+          selectDay(data.devotional.dayNumber);
+        }
+        return;
+      }
+
+      await refreshFromServer();
+      if (data.devotional?.dayNumber) {
+        selectDay(data.devotional.dayNumber);
+      }
+      setToast("A mai áhítat elkészült és publikálva lett.");
+    } catch {
+      setError({
+        error: "Hálózati hiba történt a generálás során.",
+        hint: "A böngésző nem tudta elérni a szervert. Ellenőrizd a kapcsolatot, majd próbáld újra.",
+        code: "NETWORK",
+      });
+    } finally {
+      setTodayCronLoading(false);
     }
   }
 
@@ -484,6 +555,43 @@ export function AdminDashboard({
                   {target.blockedReason}
                 </p>
               )}
+
+              <div className="mt-8 pt-6 border-t border-ivory-200">
+                <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted mb-2">
+                  Cron manuális indítás
+                </p>
+                <p className="text-sm text-ink-muted mb-4">
+                  Ha éjfél után a cron még nem futott le, itt elindíthatod a mai nap
+                  automatikus generálását (Gemini + Pexels, published státusz).
+                </p>
+                <AdminButton
+                  variant="default"
+                  onClick={handleGenerateTodayCron}
+                  disabled={
+                    todayCronLoading ||
+                    loading ||
+                    pingLoading ||
+                    regenerateLoading !== null
+                  }
+                  className="min-w-[240px]"
+                >
+                  {todayCronLoading
+                    ? "Generálás folyamatban…"
+                    : "Mai áhítat generálása most"}
+                </AdminButton>
+
+                {todayCronLoading && (
+                  <p className="mt-4 text-sm text-ink-muted">
+                    Gemini szöveg + automatikus Pexels kép keresés — kb. 30–90 másodperc.
+                  </p>
+                )}
+
+                {todayCronNotice && (
+                  <p className="mt-4 text-sm text-ink-muted rounded-xl bg-ivory-50 border border-ivory-200 px-4 py-3">
+                    {todayCronNotice}
+                  </p>
+                )}
+              </div>
             </AdminPanel>
           </div>
 

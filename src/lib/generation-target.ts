@@ -5,6 +5,7 @@ import {
 } from "./devotional-status";
 import { DEV_REVIEW_MODE } from "./dev-review";
 import type { Devotional } from "./types";
+import { getBudapestDateIso } from "./timezone";
 
 export type GenerationAction = "create" | "update" | "skip" | "blocked";
 
@@ -18,7 +19,7 @@ export interface GenerationTarget {
 }
 
 export function getTodayDateIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return getBudapestDateIso();
 }
 
 export function getDevotionalByDate(

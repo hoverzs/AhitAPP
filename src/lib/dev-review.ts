@@ -2,6 +2,7 @@
  * Fejlesztői ellenőrzési mód és automatikus publikálás.
  */
 import { isNodeDevelopment } from "./gemini-tls";
+import { isProductionDeployment } from "./cron-env";
 import type { DevotionalStatus } from "./types";
 
 function envFlag(name: string, defaultValue: boolean): boolean {
@@ -21,6 +22,7 @@ export const PROMPT_VERSION =
   process.env.PROMPT_VERSION?.trim() || "2026-05-devotional-v4-reflective";
 
 export function isCronGenerationEnabled(): boolean {
+  if (isProductionDeployment()) return true;
   return AUTO_GENERATE_DAILY;
 }
 
