@@ -19,6 +19,7 @@ import {
   parseEditableFields,
 } from "@/lib/devotional-fields";
 import type { DevotionalStatus } from "@/lib/types";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -204,6 +205,9 @@ export async function PATCH(request: Request) {
       status: devotional.status as DevotionalStatus,
     });
   } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+
     const message = err instanceof Error ? err.message : "Művelet sikertelen.";
     return NextResponse.json({ error: message }, { status: 400 });
   }

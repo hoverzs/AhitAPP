@@ -7,6 +7,7 @@ import {
   type RefinementStatusAfter,
 } from "@/lib/refine-devotional";
 import type { DevotionalRefinementResult } from "@/lib/types";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,9 @@ export async function POST(request: Request) {
       adminContext: buildAdminDevotionalContext(await readDevotionals()),
     });
   } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+
     const message = err instanceof Error ? err.message : "Mentés sikertelen.";
     return NextResponse.json({ error: message }, { status: 400 });
   }

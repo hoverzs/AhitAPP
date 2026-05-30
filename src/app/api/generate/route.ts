@@ -10,6 +10,7 @@ import {
 } from "@/lib/generate-devotional";
 import { buildAdminDevotionalContext } from "@/lib/app-data";
 import { readDevotionals, upsertDevotional } from "@/lib/devotionals";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
 
@@ -38,6 +39,9 @@ export async function POST() {
       },
     });
   } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+
     if (err instanceof GenerationBlockedError) {
       return NextResponse.json(
         {

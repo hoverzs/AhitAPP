@@ -8,6 +8,7 @@ import {
   regenerateDevotional,
   GenerationBlockedError,
 } from "@/lib/generate-devotional";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -40,6 +41,9 @@ export async function POST(request: Request) {
       adminContext: buildAdminDevotionalContext(await readDevotionals()),
     });
   } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+
     if (err instanceof GenerationBlockedError) {
       return NextResponse.json({ error: err.reason, code: "GENERATION_BLOCKED" }, { status: 409 });
     }

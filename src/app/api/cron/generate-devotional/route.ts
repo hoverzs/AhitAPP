@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAuthorizedCronOrAdminRequest } from "@/lib/cron-auth";
 import { runDailyCronGeneration } from "@/lib/cron-generate-devotional";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -79,9 +80,21 @@ async function handleCron(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  return handleCron(request);
+  try {
+    return await handleCron(request);
+  } catch (error) {
+    const storage = storageErrorResponse(error);
+    if (storage) return storage;
+    throw error;
+  }
 }
 
 export async function POST(request: NextRequest) {
-  return handleCron(request);
+  try {
+    return await handleCron(request);
+  } catch (error) {
+    const storage = storageErrorResponse(error);
+    if (storage) return storage;
+    throw error;
+  }
 }

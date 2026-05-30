@@ -7,12 +7,14 @@
     "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev",
     "generate:reading-plan": "npx tsx scripts/generate-reading-plan.ts",
     "backfill:images": "npx tsx scripts/backfill-devotional-images.ts",
+    "migrate:redis": "npx tsx scripts/migrate-devotionals-to-redis.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
+    "@upstash/redis": "^1.38.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

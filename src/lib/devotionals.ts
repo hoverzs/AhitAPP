@@ -1,121 +1,106 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { isDevotionalStatus, normalizeDevotional } from "./devotional-status";
+import { normalizeDevotional } from "./devotional-status";
 import { isHeroImageUrl } from "./image-assets";
+import {
+  devotionalDateKey,
+  getDevotionalStorage,
+  type GetLatestDevotionalsOptions,
+} from "./storage";
 import type { Devotional, DevotionalStatus } from "./types";
 
-const DATA_PATH = path.join(process.cwd(), "data", "devotionals.json");
+export { ProductionStorageNotConfiguredError } from "./storage";
+export type { GetLatestDevotionalsOptions } from "./storage";
 
-function isValidDevotional(entry: unknown): entry is Devotional {
-  if (!entry || typeof entry !== "object") return false;
-  const d = entry as Devotional;
-  const hasDate = d.date === undefined || typeof d.date === "string";
-  const hasStatus =
-    d.status === undefined ||
-    (typeof d.status === "string" && isDevotionalStatus(d.status));
-
-  return (
-    typeof d.dayNumber === "number" &&
-    d.dayNumber >= 1 &&
-    typeof d.title === "string" &&
-    typeof d.verse === "string" &&
-    typeof d.content === "string" &&
-    typeof d.imageUrl === "string" &&
-    typeof d.createdAt === "string" &&
-    hasDate &&
-    hasStatus &&
-    (d.category === undefined || typeof d.category === "string") &&
-    (d.facebookCopy === undefined || typeof d.facebookCopy === "string") &&
-    (d.prayer === undefined || typeof d.prayer === "string") &&
-    (d.reflectionQuestion === undefined || typeof d.reflectionQuestion === "string") &&
-    (d.promptVersion === undefined || typeof d.promptVersion === "string") &&
-    (d.generationModel === undefined || typeof d.generationModel === "string") &&
-    (d.editedByAdmin === undefined || typeof d.editedByAdmin === "boolean") &&
-    (d.imageKeywords === undefined || typeof d.imageKeywords === "string") &&
-    (d.imageSource === undefined ||
-      d.imageSource === "pexels_auto" ||
-      d.imageSource === "pexels" ||
-      d.imageSource === "imagen" ||
-      d.imageSource === "manual") &&
-    (d.imageCredit === undefined || typeof d.imageCredit === "string") &&
-    (d.imagePhotographerUrl === undefined || typeof d.imagePhotographerUrl === "string") &&
-    (d.pexelsPhotoId === undefined || typeof d.pexelsPhotoId === "number")
-  );
+/** Összes (retention által megtartott) áhítat — legújabb elöl. */
+export async function getLatestDevotionals(
+  options?: GetLatestDevotionalsOptions
+): Promise<Devotional[]> {
+  const storage = getDevotionalStorage();
+  return storage.getLatestDevotionals(options);
 }
 
+/** @deprecated Használd getLatestDevotionals() — visszafelé kompatibilitás. */
 export async function readDevotionals(): Promise<Devotional[]> {
-  try {
-    const raw = await fs.readFile(DATA_PATH, "utf-8");
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isValidDevotional).map(normalizeDevotional);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.error("[readDevotionals]", error);
-    }
-    return [];
-  }
+  return getLatestDevotionals();
 }
 
 export async function writeDevotionals(devotionals: Devotional[]): Promise<void> {
-  await fs.mkdir(path.dirname(DATA_PATH), { recursive: true });
-  const sorted = [...devotionals].sort((a, b) => a.dayNumber - b.dayNumber);
-  await fs.writeFile(DATA_PATH, JSON.stringify(sorted, null, 2), "utf-8");
+  const storage = getDevotionalStorage();
+  const existing = await storage.getLatestDevotionals();
+  const existingByDate = new Map(existing.map((d) => [devotionalDateKey(d), d]));
+
+  for (const entry of devotionals) {
+    const normalized = normalizeDevotional(entry);
+    const date = devotionalDateKey(normalized);
+    if (existingByDate.has(date)) {
+      await storage.updateDevotional(date, normalized);
+    } else {
+      await storage.saveDevotional(normalized);
+    }
+    existingByDate.set(date, normalized);
+  }
+
+  for (const d of existing) {
+    const date = devotionalDateKey(d);
+    if (!devotionals.some((entry) => devotionalDateKey(entry) === date)) {
+      await storage.deleteDevotional(date);
+    }
+  }
 }
 
 export async function getDevotionalByDay(
   dayNumber: number
 ): Promise<Devotional | undefined> {
-  const all = await readDevotionals();
+  const all = await getLatestDevotionals();
   return all.find((d) => d.dayNumber === dayNumber);
 }
 
+export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
+  const storage = getDevotionalStorage();
+  return storage.getDevotionalByDate(date);
+}
+
 export async function appendDevotional(entry: Devotional): Promise<Devotional> {
-  const all = await readDevotionals();
-  if (all.some((d) => d.dayNumber === entry.dayNumber)) {
-    throw new Error(`A ${entry.dayNumber}. nap már létezik.`);
-  }
-  all.push(normalizeDevotional(entry));
-  await writeDevotionals(all);
-  return entry;
+  const storage = getDevotionalStorage();
+  return storage.saveDevotional(normalizeDevotional(entry));
 }
 
 export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
+  const storage = getDevotionalStorage();
   const normalized = normalizeDevotional(entry);
-  const all = await readDevotionals();
+  const all = await storage.getLatestDevotionals();
   const idx = all.findIndex((d) => d.dayNumber === normalized.dayNumber);
 
   if (idx >= 0) {
-    all[idx] = normalized;
-  } else {
-    all.push(normalized);
+    const date = devotionalDateKey(all[idx]);
+    return storage.updateDevotional(date, normalized);
   }
 
-  await writeDevotionals(all);
-  return normalized;
+  return storage.saveDevotional(normalized);
+}
+
+async function patchDevotionalByDay(
+  dayNumber: number,
+  patch: Partial<Devotional>
+): Promise<Devotional> {
+  const storage = getDevotionalStorage();
+  const all = await storage.getLatestDevotionals();
+  const existing = all.find((d) => d.dayNumber === dayNumber);
+
+  if (!existing) {
+    throw new Error(`A ${dayNumber}. nap nem található.`);
+  }
+
+  const date = devotionalDateKey(existing);
+  const updated = normalizeDevotional({ ...existing, ...patch });
+  return storage.updateDevotional(date, updated);
 }
 
 export async function updateDevotionalStatus(
   dayNumber: number,
   status: DevotionalStatus
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
-    status,
-    updatedAt: now,
-    ...(status === "draft" ? {} : {}),
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+  return patchDevotionalByDay(dayNumber, { status, updatedAt: now });
 }
 
 export async function saveDevotionalAdminEdit(
@@ -134,24 +119,13 @@ export async function saveDevotionalAdminEdit(
     >
   >
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     ...patch,
     editedByAdmin: true,
     updatedAt: now,
-    contentCharCount: patch.content?.length ?? all[idx].contentCharCount,
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+    contentCharCount: patch.content?.length,
+  });
 }
 
 export async function saveDevotionalDraft(
@@ -169,25 +143,14 @@ export async function saveDevotionalDraft(
     >
   >
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     ...patch,
     status: "draft",
     editedByAdmin: true,
     updatedAt: now,
-    contentCharCount: patch.content?.length ?? all[idx].contentCharCount,
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+    contentCharCount: patch.content?.length,
+  });
 }
 
 export interface DevotionalPexelsImagePatch {
@@ -202,20 +165,12 @@ export async function saveDevotionalPexelsImage(
   image: DevotionalPexelsImagePatch,
   options?: { source?: "pexels" | "pexels_auto" }
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   if (isHeroImageUrl(image.imageUrl)) {
     throw new Error("A header/hero kép nem használható áhítat illusztrációként.");
   }
 
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     imageUrl: image.imageUrl.trim(),
     imageSource: options?.source ?? "pexels",
     imageCredit: image.imageCredit.trim(),
@@ -223,23 +178,12 @@ export async function saveDevotionalPexelsImage(
     pexelsPhotoId: image.pexelsPhotoId,
     editedByAdmin: true,
     updatedAt: now,
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+  });
 }
 
 export async function clearDevotionalImage(dayNumber: number): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     imageUrl: "",
     imageSource: undefined,
     imageCredit: undefined,
@@ -247,10 +191,7 @@ export async function clearDevotionalImage(dayNumber: number): Promise<Devotiona
     pexelsPhotoId: undefined,
     editedByAdmin: true,
     updatedAt: now,
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+  });
 }
 
 export async function saveDevotionalManualImage(
@@ -258,13 +199,6 @@ export async function saveDevotionalManualImage(
   imageUrl: string,
   options?: { imageCredit?: string }
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const url = imageUrl.trim();
   if (!url) {
     throw new Error("Érvénytelen kép URL.");
@@ -274,8 +208,7 @@ export async function saveDevotionalManualImage(
   }
 
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     imageUrl: url,
     imageSource: "manual",
     imageCredit: options?.imageCredit?.trim() || "Feltöltött kép",
@@ -283,31 +216,22 @@ export async function saveDevotionalManualImage(
     pexelsPhotoId: undefined,
     editedByAdmin: true,
     updatedAt: now,
-  };
-
-  await writeDevotionals(all);
-  return all[idx];
+  });
 }
 
 export async function saveDevotionalImageKeywords(
   dayNumber: number,
   imageKeywords: string
 ): Promise<Devotional> {
-  const all = await readDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === dayNumber);
-
-  if (idx < 0) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
-  }
-
   const now = new Date().toISOString();
-  all[idx] = {
-    ...all[idx],
+  return patchDevotionalByDay(dayNumber, {
     imageKeywords: imageKeywords.trim(),
     editedByAdmin: true,
     updatedAt: now,
-  };
+  });
+}
 
-  await writeDevotionals(all);
-  return all[idx];
+export async function deleteDevotionalByDate(date: string): Promise<void> {
+  const storage = getDevotionalStorage();
+  await storage.deleteDevotional(date);
 }
