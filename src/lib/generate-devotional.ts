@@ -136,7 +136,7 @@ async function buildDevotionalFromPlan(
     imageCredit,
     imagePhotographerUrl,
     pexelsPhotoId,
-    facebookCopy: planned.facebookCopy,
+    facebookCopy: planned.excerpt?.trim() || planned.facebookCopy,
     status: keepStatus ? existing!.status! : defaultGeneratedStatus(),
     promptVersion: PROMPT_VERSION,
     generationModel: GEMINI_PLANNER_MODEL,

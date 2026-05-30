@@ -25,8 +25,8 @@ export async function generateDevotionalText(
     model: GEMINI_TEXT_MODEL,
     systemInstruction: DEVOTIONAL_SYSTEM_PROMPT,
     generationConfig: {
-      temperature: 0.75,
-      maxOutputTokens: 4096,
+      temperature: 0.7,
+      maxOutputTokens: 1600,
     },
   });
 

@@ -70,6 +70,8 @@ export interface DynamicPlannedDay {
   verse: string;
   content: string;
   category: string;
+  /** Rövid kivonat — Facebook megosztáshoz */
+  excerpt?: string;
   facebookCopy?: string;
   imageKeywords?: string;
 }
