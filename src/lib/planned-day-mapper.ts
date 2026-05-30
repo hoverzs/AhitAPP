@@ -1,12 +1,9 @@
-import { formatVerseAsBlockquote } from "./devotional-sections";
 import {
   normalizeDevotionalMarkdownBody,
   truncateDevotionalMarkdown,
 } from "./devotional-markdown";
 import { parseImageKeywordTags } from "./image-keywords";
 import type { DynamicPlannedDay } from "./types";
-
-/** 1. lépés — rövid metadata JSON. */
 export interface DevotionalMetadata {
   title: string;
   scripture: string;
@@ -81,31 +78,14 @@ export function parseMetadataJson(raw: string): DevotionalMetadata {
   };
 }
 
-function extractVerseText(scripture: string): string {
-  const trimmed = scripture.trim();
-  const dashSplit = trimmed.split(/\s*[—–-]\s+/);
-  if (dashSplit.length >= 2) {
-    return dashSplit.slice(1).join(" — ").trim();
-  }
-  return trimmed;
-}
-
-/** scripture + markdown törzs → teljes content. Ha a modell már adott Alapige szekciót, nem duplikáljuk. */
+/** scripture + markdown törzs → teljes content (toleráns parse). */
 export function assembleDevotionalContent(
   scripture: string,
   devotionalMarkdown: string
 ): string {
-  const body = normalizeDevotionalMarkdownBody(devotionalMarkdown);
-
-  if (/###\s+Alapige/i.test(body)) {
-    return body;
-  }
-
-  const quote = extractVerseText(scripture);
-  const alapigeBody = formatVerseAsBlockquote(quote || scripture.trim());
-  const alapige = `### Alapige\n\n${alapigeBody}`;
-
-  return `${alapige}\n\n${body}`;
+  return normalizeDevotionalMarkdownBody(devotionalMarkdown, {
+    scriptureFallback: scripture,
+  });
 }
 
 export function assemblePlannedDayFromParts(

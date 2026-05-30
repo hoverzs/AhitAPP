@@ -1,3 +1,5 @@
+import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+
 /** Szekció metaadat — cím normalizálás és ikon azonosító */
 export type DevotionalSectionId =
   | "alapige"
@@ -97,7 +99,7 @@ export function parseDevotionalSections(
     return sections;
   }
 
-  const headerRegex = /^#{1,3}\s+(.+)$/gm;
+  const headerRegex = /^#{1,6}\s+(.+)$/gm;
   const matches = [...trimmed.matchAll(headerRegex)];
 
   if (matches.length === 0) {
@@ -150,7 +152,40 @@ export function parseDevotionalSections(
     sections.push({ id, title, body });
   }
 
-  return sections.filter((s) => s.body.length > 0);
+  return enrichSectionsWithTolerantMeditation(trimmed, sections);
+}
+
+/**
+ * Ha az Elmélkedés üres, de a toleráns parser talált törzsszöveget — injektáljuk.
+ */
+function enrichSectionsWithTolerantMeditation(
+  content: string,
+  sections: DevotionalSection[]
+): DevotionalSection[] {
+  const filtered = sections.filter((s) => s.body.length > 0);
+  const parsed = parseTolerantDevotionalMarkdown(content, { log: false });
+  const devotionalBody = parsed.devotional.trim();
+  if (!devotionalBody) {
+    return filtered;
+  }
+
+  const meditation = filtered.find((s) => s.id === "elmélkedes");
+  if (meditation) {
+    if (!meditation.body.trim()) {
+      meditation.body = devotionalBody;
+    }
+    return filtered;
+  }
+
+  const alapigeIndex = filtered.findIndex((s) => s.id === "alapige");
+  const insertAt = alapigeIndex >= 0 ? alapigeIndex + 1 : 0;
+  const next = [...filtered];
+  next.splice(insertAt, 0, {
+    id: "elmélkedes",
+    title: "Elmélkedés",
+    body: devotionalBody,
+  });
+  return next;
 }
 
 /** Bibliai ige blockquote markdownként (ha még nincs > előtag). */
