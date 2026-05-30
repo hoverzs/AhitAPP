@@ -4,7 +4,7 @@ import { localJsonStorage } from "./local-json-storage";
 import { isRedisStorageConfigured, redisStorage } from "./redis-storage";
 import type { DevotionalStorage, StorageDriver } from "./types";
 
-export type { DevotionalStorage, StorageDriver } from "./types";
+export type { DevotionalStorage, StorageDriver, GetLatestDevotionalsOptions } from "./types";
 export {
   ProductionStorageNotConfiguredError,
   isProductionStorageNotConfiguredError,
@@ -22,16 +22,8 @@ export {
   REDIS_DEVOTIONALS_LEGACY_KEY,
 } from "./redis-storage";
 export { getRetentionCutoffDate, getRetentionDays } from "./retention";
-export type { GetLatestDevotionalsOptions } from "./types";
 export { storageErrorResponse, withStorageErrorFallback } from "./api-error";
 
-/**
- * Storage driver feloldás:
- * - STORAGE_DRIVER=local → JSON fájl (fejlesztés)
- * - STORAGE_DRIVER=redis → Upstash / Vercel KV Redis
- * - Vercel deploy (VERCEL=1) → Redis kötelező
- * - egyéb → local JSON
- */
 export function resolveStorageDriver(): StorageDriver {
   const explicit = process.env.STORAGE_DRIVER?.trim().toLowerCase();
   if (explicit === "local") return "local";

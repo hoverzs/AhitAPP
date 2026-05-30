@@ -10,7 +10,7 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  const { memory, reviewDevotional, adminContext, listItems, devotionals } =
+  const { memory, reviewDevotional, adminContext, listItems, devotionals, storageError, storageHint } =
     await loadAdminPageData();
 
   return (
@@ -20,6 +20,8 @@ export default async function AdminPage() {
       adminContext={adminContext}
       initialListItems={listItems}
       initialDevotionals={devotionals}
+      storageError={storageError}
+      storageHint={storageHint}
     />
   );
 }

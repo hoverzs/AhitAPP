@@ -2,6 +2,7 @@ import { Redis } from "@upstash/redis";
 import { promises as fs } from "fs";
 import { normalizeDevotional } from "../devotional-status";
 import type { Devotional } from "../types";
+import { getBundledDevotionalsForSeed } from "./bundled-seed";
 import {
   devotionalDateKey,
   parseDevotionalList,
@@ -106,10 +107,21 @@ async function migrateLegacyBlob(redis: Redis): Promise<void> {
   );
 }
 
-async function seedFromBundledJson(redis: Redis): Promise<number> {
+async function loadSeedDevotionals(): Promise<Devotional[]> {
+  const bundled = getBundledDevotionalsForSeed();
+  if (bundled.length > 0) return bundled;
+
   try {
     const raw = await fs.readFile(LOCAL_DEVOTIONALS_PATH, "utf-8");
-    const parsed = parseDevotionalList(JSON.parse(raw));
+    return parseDevotionalList(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+async function seedFromBundledJson(redis: Redis): Promise<number> {
+  try {
+    const parsed = await loadSeedDevotionals();
     if (parsed.length === 0) return 0;
 
     for (const d of parsed) {
@@ -125,7 +137,8 @@ async function seedFromBundledJson(redis: Redis): Promise<number> {
       `[redisStorage] Seed: ${parsed.length} áhítat betöltve bundled JSON-ból.`
     );
     return parsed.length;
-  } catch {
+  } catch (error) {
+    console.error("[redisStorage] Seed failed:", error);
     return 0;
   }
 }
@@ -250,16 +263,13 @@ export async function migrateLocalJsonToRedis(): Promise<number> {
   const redis = getRedisClient();
   legacyMigrationDone = false;
 
-  try {
-    const raw = await fs.readFile(LOCAL_DEVOTIONALS_PATH, "utf-8");
-    const parsed = parseDevotionalList(JSON.parse(raw));
-    for (const d of sortDevotionals(parsed)) {
-      await writeDevotionalRecord(redis, d);
-    }
-    await applyRetention(redis);
-    legacyMigrationDone = true;
-    return parsed.length;
-  } catch {
-    return 0;
+  const parsed = await loadSeedDevotionals();
+  if (parsed.length === 0) return 0;
+
+  for (const d of sortDevotionals(parsed)) {
+    await writeDevotionalRecord(redis, d);
   }
+  await applyRetention(redis);
+  legacyMigrationDone = true;
+  return parsed.length;
 }

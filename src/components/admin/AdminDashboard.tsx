@@ -39,6 +39,8 @@ interface AdminDashboardProps {
   adminContext: AdminDevotionalContext;
   initialListItems: AdminDevotionalListItem[];
   initialDevotionals: Devotional[];
+  storageError?: string | null;
+  storageHint?: string | null;
 }
 
 interface ApiErrorPayload {
@@ -65,6 +67,8 @@ export function AdminDashboard({
   adminContext,
   initialListItems,
   initialDevotionals,
+  storageError: initialStorageError,
+  storageHint: initialStorageHint,
 }: AdminDashboardProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -451,6 +455,15 @@ export function AdminDashboard({
       />
 
       <AdminMain>
+        {initialStorageError && (
+          <AdminErrorAlert
+            title="Production tároló nincs beállítva"
+            message={initialStorageError}
+            hint={initialStorageHint ?? undefined}
+            meta="STORAGE_NOT_CONFIGURED"
+          />
+        )}
+
         {context.devReviewMode && (
           <div className="admin-banner-dev">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-900 mb-1">

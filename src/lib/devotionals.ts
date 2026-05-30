@@ -3,6 +3,10 @@ import { isHeroImageUrl } from "./image-assets";
 import {
   devotionalDateKey,
   getDevotionalStorage,
+  isProductionStorageNotConfiguredError,
+  isRemoteStorageRequired,
+  isRedisStorageConfigured,
+  resolveStorageDriver,
   type GetLatestDevotionalsOptions,
 } from "./storage";
 import type { Devotional, DevotionalStatus } from "./types";
@@ -10,17 +14,72 @@ import type { Devotional, DevotionalStatus } from "./types";
 export { ProductionStorageNotConfiguredError } from "./storage";
 export type { GetLatestDevotionalsOptions } from "./storage";
 
-/** Összes (retention által megtartott) áhítat — legújabb elöl. */
+export interface ReadDevotionalsResult {
+  devotionals: Devotional[];
+  storageError: string | null;
+  storageHint: string | null;
+  driver: ReturnType<typeof resolveStorageDriver>;
+}
+
+const STORAGE_NOT_CONFIGURED_HU =
+  "A production tároló nincs konfigurálva (Upstash Redis / Vercel KV).";
+
+const STORAGE_NOT_CONFIGURED_HINT =
+  "Vercel → Project → Storage / Integrations → Upstash Redis. Production env: KV_REST_API_URL és KV_REST_API_TOKEN. Ezután redeploy, vagy futtasd: npm run migrate:redis";
+
+/** Admin / diagnosztika — storage hiba státusszal. */
+export async function readDevotionalsWithStatus(): Promise<ReadDevotionalsResult> {
+  const driver = resolveStorageDriver();
+
+  try {
+    const storage = getDevotionalStorage();
+    const devotionals = await storage.getLatestDevotionals();
+    return {
+      devotionals,
+      storageError: null,
+      storageHint: null,
+      driver,
+    };
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) {
+      return {
+        devotionals: [],
+        storageError: STORAGE_NOT_CONFIGURED_HU,
+        storageHint: STORAGE_NOT_CONFIGURED_HINT,
+        driver,
+      };
+    }
+    throw error;
+  }
+}
+
+/** Összes (retention alatt) áhítat — publikus oldalon üres listát ad storage hiba esetén. */
 export async function getLatestDevotionals(
   options?: GetLatestDevotionalsOptions
 ): Promise<Devotional[]> {
-  const storage = getDevotionalStorage();
-  return storage.getLatestDevotionals(options);
+  try {
+    const storage = getDevotionalStorage();
+    return storage.getLatestDevotionals(options);
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) {
+      console.error("[getLatestDevotionals]", STORAGE_NOT_CONFIGURED_HU);
+      return [];
+    }
+    throw error;
+  }
 }
 
 /** @deprecated Használd getLatestDevotionals() — visszafelé kompatibilitás. */
 export async function readDevotionals(): Promise<Devotional[]> {
   return getLatestDevotionals();
+}
+
+export function getStorageDiagnostics() {
+  return {
+    driver: resolveStorageDriver(),
+    remoteRequired: isRemoteStorageRequired(),
+    redisConfigured: isRedisStorageConfigured(),
+  };
 }
 
 export async function writeDevotionals(devotionals: Devotional[]): Promise<void> {
@@ -55,8 +114,15 @@ export async function getDevotionalByDay(
 }
 
 export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
-  const storage = getDevotionalStorage();
-  return storage.getDevotionalByDate(date);
+  try {
+    const storage = getDevotionalStorage();
+    return storage.getDevotionalByDate(date);
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 export async function appendDevotional(entry: Devotional): Promise<Devotional> {

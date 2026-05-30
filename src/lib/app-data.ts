@@ -1,4 +1,4 @@
-import { readDevotionals } from "./devotionals";
+import { readDevotionalsWithStatus } from "./devotionals";
 import { buildDevotionalMemory } from "./devotional-memory";
 import {
   isPendingReview,
@@ -39,7 +39,7 @@ const EMPTY_HOME: HomePageData = {
 
 export async function loadHomePageData(): Promise<HomePageData> {
   try {
-    const all = await readDevotionals();
+    const { devotionals: all } = await readDevotionalsWithStatus();
     const devotionals = filterPublicDevotionals(all);
     const latest = getLatestDevotional(devotionals);
     const recent = getRecentDevotionals(devotionals, 3);
@@ -76,7 +76,8 @@ export async function loadSiteNavData(): Promise<{
   publishedCount: number;
 }> {
   try {
-    const devotionals = filterPublicDevotionals(await readDevotionals());
+    const { devotionals: published } = await readDevotionalsWithStatus();
+    const devotionals = filterPublicDevotionals(published);
     const latest = getLatestDevotional(devotionals);
     return {
       todayHref: latest ? `/nap/${latest.dayNumber}` : "/admin",
@@ -141,16 +142,37 @@ export async function loadAdminPageData(): Promise<{
   adminContext: AdminDevotionalContext;
   devotionals: Devotional[];
   listItems: AdminDevotionalListItem[];
+  storageError: string | null;
+  storageHint: string | null;
 }> {
+  const {
+    devotionals: raw,
+    storageError,
+    storageHint,
+  } = await readDevotionalsWithStatus();
+
+  if (storageError) {
+    const emptyCtx = buildAdminDevotionalContext([]);
+    return {
+      memory: buildDevotionalMemory([]),
+      latest: null,
+      reviewDevotional: null,
+      adminContext: emptyCtx,
+      devotionals: [],
+      listItems: [],
+      storageError,
+      storageHint,
+    };
+  }
+
   try {
-    const devotionals = await readDevotionals();
-    const normalized = devotionals.map(normalizeDevotional);
+    const devotionals = raw.map(normalizeDevotional);
 
     const reviewDevotional =
-      normalized.find((d) => isPendingReview(d.status)) ??
-      getLatestDevotional(normalized);
+      devotionals.find((d) => isPendingReview(d.status)) ??
+      getLatestDevotional(devotionals);
 
-    const memory = buildDevotionalMemory(devotionals, {
+    const memory = buildDevotionalMemory(raw, {
       nextDayNumber: resolveManualGenerationTarget(devotionals).dayNumber,
     });
 
@@ -159,8 +181,10 @@ export async function loadAdminPageData(): Promise<{
       latest: reviewDevotional,
       reviewDevotional,
       adminContext: buildAdminDevotionalContext(devotionals),
-      devotionals: normalized,
+      devotionals,
       listItems: toAdminListItems(devotionals),
+      storageError: null,
+      storageHint: null,
     };
   } catch (error) {
     console.error("[loadAdminPageData]", error);
@@ -172,6 +196,8 @@ export async function loadAdminPageData(): Promise<{
       adminContext: emptyCtx,
       devotionals: [],
       listItems: [],
+      storageError: "Nem sikerült betölteni az áhítatokat.",
+      storageHint: error instanceof Error ? error.message : null,
     };
   }
 }
