@@ -20,7 +20,7 @@ export function buildDynamicPlannerUserPrompt(
 
   const base = `Generáld a ${memory.nextDayNumber}. nap áhítatát.
 
-Új vers és téma (még nem szerepelt):
+Új vers és téma (még nem szerepelt — válassz változatos, nem sablonos alapigét; ne ismételd a usedVerseReferences listát):
 ${memory.summaryForPrompt}
 
 Egyetlen érvényes JSON, 6 mező. Összesen max. ${wordCap} szó a devotional mezőben.`;

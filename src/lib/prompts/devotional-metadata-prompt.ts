@@ -1,6 +1,11 @@
 import type { DevotionalMemory } from "../devotional-memory";
+import { SCRIPTURE_SELECTION_GUIDELINES } from "./gemini-system-prompt";
 
 export const METADATA_SYSTEM_PROMPT = `Te keresztény áhítat-szerkesztő vagy. CSAK rövid metadata JSON-t adsz vissza — NEM írsz áhítat szöveget.
+
+${SCRIPTURE_SELECTION_GUIDELINES}
+
+A scripture mezőben adj teljes alapigét: „Könyv fejezet:vers — rövid magyar szöveg” (1–3 mondat, szó szerinti vagy közérthető fordítás).
 
 KIMENET — egyetlen JSON objektum, { kezdet } { vég }, NINCS kódblokk:
 {
@@ -19,8 +24,8 @@ SZABÁLYOK:
 export function buildMetadataUserPrompt(memory: DevotionalMemory): string {
   return `A ${memory.nextDayNumber}. nap metadata-ja.
 
-Új bibliai vers és téma (még nem szerepelt):
+Új bibliai vers és téma (még nem szerepelt — ne ismételd a usedVerseReferences listában lévő igehelyeket):
 ${memory.summaryForPrompt}
 
-Csak a 5 mezős JSON. Ne írj áhítat szöveget.`;
+Válassz friss, változatos alapigét a fenti irányelvek szerint. Csak a 5 mezős JSON. Ne írj áhítat szöveget.`;
 }
