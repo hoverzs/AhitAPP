@@ -71,3 +71,14 @@ export function isPublicDevotional(entry: Devotional): boolean {
 export function filterPublicDevotionals(devotionals: Devotional[]): Devotional[] {
   return devotionals.filter(isPublicDevotional);
 }
+
+/** Naptár: közzétett + van tartalom (nem kell teljes szöveg-validáció). */
+export function filterCalendarDevotionals(devotionals: Devotional[]): Devotional[] {
+  return devotionals
+    .map(normalizeDevotional)
+    .filter(
+      (d) =>
+        normalizeDevotionalStatus(d.status) === "published" &&
+        Boolean(d.content?.trim())
+    );
+}

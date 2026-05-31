@@ -64,7 +64,7 @@ export function DevotionalArticleLayout({
       )}
 
       <figure className="devotional-article-figure w-full mb-8 md:mb-10 m-0">
-        <div className="devotional-article-image relative w-full aspect-video max-h-[420px] overflow-hidden rounded-[24px] bg-parchment-100 shadow-card">
+        <div className="devotional-article-image-frame devotional-article-image">
           <DevotionalIllustration
             imageUrl={imageUrl}
             alt={title}
@@ -75,8 +75,8 @@ export function DevotionalArticleLayout({
             allowFallback
           />
         </div>
-        <figcaption className="mt-3 px-1 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 text-xs text-ink-muted/65">
-          <span>{dayNumber}. nap</span>
+        <figcaption className="devotional-article-caption">
+          <span className="devotional-article-caption-day">{dayNumber}. nap</span>
           {showCredit && (
             <ImageCredit devotional={{ ...imageMeta, imageUrl }} className="sm:text-right" />
           )}

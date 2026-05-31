@@ -11,17 +11,15 @@ interface SidebarPanelProps {
 export function SidebarPanel({ title, icon, children, id }: SidebarPanelProps) {
   return (
     <section id={id} className="sidebar-panel">
-      <header className="flex items-center gap-2.5 px-5 py-3.5 border-b border-ivory-200/60">
+      <header className="sidebar-panel__header">
         {icon && (
-          <span className="flex-shrink-0 text-gold-600/80 w-4 h-4 flex items-center justify-center">
+          <span className="sidebar-category-icon flex-shrink-0 [&_svg]:w-3.5 [&_svg]:h-3.5">
             {icon}
           </span>
         )}
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-          {title}
-        </h2>
+        <h2 className="sidebar-panel__title">{title}</h2>
       </header>
-      <div className="p-5">{children}</div>
+      <div className="sidebar-panel__body">{children}</div>
     </section>
   );
 }

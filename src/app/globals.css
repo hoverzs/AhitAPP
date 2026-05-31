@@ -10,7 +10,12 @@
   }
 
   body {
-    @apply bg-ivory-50 text-ink font-sans overflow-x-hidden max-w-[100vw];
+    @apply bg-warm-bg text-ink font-sans overflow-x-hidden max-w-[100vw];
+    background-image: radial-gradient(
+      ellipse 120% 80% at 50% -20%,
+      rgba(200, 155, 60, 0.06),
+      transparent 55%
+    );
   }
 
   img,
@@ -90,40 +95,145 @@
     @apply w-full max-w-[760px] mx-auto text-ink;
   }
 
+  /* —— Áhítat szekció kártyák — prémium, rétegzett —— */
+  .devotional-section-card {
+    @apply relative rounded-[1.35rem] border px-6 py-6 md:px-9 md:py-8 shadow-premium transition-all duration-300 ease-out;
+  }
+
+  .devotional-section-card:hover {
+    @apply -translate-y-0.5 shadow-card-hover;
+  }
+
+  .devotional-section-card__header {
+    @apply flex items-center gap-3.5 mb-5 pb-4 border-b border-gold-500/10;
+  }
+
+  .devotional-section-card__title {
+    @apply font-serif text-xl md:text-[1.4rem] font-semibold text-ink tracking-tight;
+  }
+
+  .devotional-section-card--alapige {
+    background: linear-gradient(135deg, #fffdf8 0%, #faf0dc 48%, #fff9ee 100%);
+    border-color: rgba(200, 155, 60, 0.28);
+    box-shadow:
+      0 14px 40px -16px rgba(185, 130, 37, 0.18),
+      inset 4px 0 0 rgba(200, 155, 60, 0.55);
+  }
+
+  .devotional-section-card--meditation {
+    background: linear-gradient(160deg, #fffdf8 0%, #f8f1e7 55%, #fffdf8 100%);
+    border-color: rgba(200, 155, 60, 0.14);
+    @apply md:px-10 md:py-9;
+  }
+
+  .devotional-section-card--prayer {
+    background: linear-gradient(145deg, #f4f8f0 0%, #eef4e8 42%, #faf8f4 100%);
+    border-color: rgba(197, 212, 188, 0.65);
+  }
+
+  .devotional-section-card--question {
+    background: linear-gradient(145deg, #fffbf5 0%, #faf0dc 50%, #fffdf8 100%);
+    border-color: rgba(200, 155, 60, 0.22);
+  }
+
+  .devotional-section-card--default {
+    background: linear-gradient(160deg, #fffdf8 0%, #f8f1e7 100%);
+    border-color: rgba(200, 155, 60, 0.12);
+  }
+
+  .devotional-section-icon {
+    @apply flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl shadow-icon-capsule;
+    background: linear-gradient(145deg, #fffef9 0%, #f5e6c8 100%);
+    border: 1px solid rgba(200, 155, 60, 0.28);
+    color: #b98225;
+  }
+
+  .devotional-section-icon--alapige {
+    background: linear-gradient(145deg, #fff9eb 0%, #f0d99a 100%);
+    color: #9a6b1a;
+  }
+
+  .devotional-section-icon--meditation {
+    color: #b98225;
+  }
+
+  .devotional-section-icon--prayer {
+    background: linear-gradient(145deg, #f6faf3 0%, #dde8d5 100%);
+    border-color: rgba(197, 212, 188, 0.8);
+    color: #5a7350;
+  }
+
+  .devotional-section-icon--question {
+    background: linear-gradient(145deg, #fff8eb 0%, #f5ddb0 100%);
+    color: #a67320;
+  }
+
   .devotional-blockquote {
-    @apply relative my-0 pl-5 md:pl-6 border-l-[3px] border-gold-500/50;
+    @apply relative my-0 pl-5 md:pl-6 border-l-[3px] border-gold-500/55;
   }
 
   .devotional-blockquote p {
-    @apply font-serif text-lg md:text-[1.125rem] leading-[1.9] text-ink/90 italic;
+    @apply font-serif text-lg md:text-[1.125rem] leading-[1.9] text-ink italic;
   }
 
   .devotional-blockquote p:last-child {
     @apply mb-0;
   }
 
+  .devotional-markdown p {
+    @apply mb-5 last:mb-0 text-[1.0625rem] sm:text-[1.075rem] leading-[1.8] text-ink font-serif;
+  }
+
   .devotional-markdown strong {
     @apply font-semibold text-ink;
+    font-weight: 600;
   }
 
   .devotional-markdown em {
-    @apply italic text-ink/85;
+    @apply italic text-ink/90 font-serif;
   }
 
   .devotional-markdown--prayer p {
-    @apply text-ink/90;
+    @apply text-ink/95;
   }
 
   .devotional-markdown--question p {
-    @apply text-[1.0625rem] leading-[1.8] text-ink/90;
+    @apply text-[1.0625rem] leading-[1.82] text-ink;
   }
 
   .devotional-markdown--scripture .devotional-blockquote {
-    @apply border-l-[3px] border-gold-500/55;
+    @apply border-l-[3px] border-gold-500/65 pl-6;
   }
 
   .devotional-section-card .devotional-markdown > *:first-child {
     @apply mt-0;
+  }
+
+  /* Napi illusztráció — prémium keret */
+  .devotional-article-figure {
+    @apply relative;
+  }
+
+  .devotional-article-image-frame {
+    @apply relative w-full overflow-hidden rounded-[24px] bg-warm-soft;
+    box-shadow:
+      0 20px 50px -22px rgba(23, 32, 51, 0.22),
+      0 0 0 1px rgba(200, 155, 60, 0.18),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  }
+
+  .devotional-article-image-frame::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0 rounded-[24px];
+    box-shadow: inset 0 0 0 1px rgba(200, 155, 60, 0.12);
+  }
+
+  .devotional-article-caption {
+    @apply mt-3 px-1 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 text-[11px] text-ink-muted tracking-wide;
+  }
+
+  .devotional-article-caption-day {
+    @apply font-medium uppercase tracking-[0.12em] text-gold-600/80;
   }
 
   .animate-enter {
@@ -144,7 +254,7 @@
 
   /* —— Főoldal editorial layout —— */
   .home-content {
-    @apply bg-ivory-50;
+    @apply bg-warm-bg;
   }
 
   .home-container {
@@ -156,7 +266,19 @@
   }
 
   .editorial-feature {
-    @apply rounded-[1.75rem] border border-ivory-200/80 bg-white shadow-[0_12px_48px_-16px_rgba(23,32,51,0.1)] overflow-hidden;
+    @apply rounded-[1.75rem] overflow-hidden transition-shadow duration-300;
+    background: linear-gradient(165deg, #fffdf8 0%, #f8f1e7 38%, #fffdf8 100%);
+    border: 1px solid rgba(200, 155, 60, 0.16);
+    box-shadow:
+      0 18px 52px -20px rgba(23, 32, 51, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  }
+
+  .editorial-feature:hover {
+    box-shadow:
+      0 24px 56px -18px rgba(23, 32, 51, 0.16),
+      0 0 0 1px rgba(200, 155, 60, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .editorial-feature-inner {
@@ -219,7 +341,100 @@
   }
 
   .sidebar-panel {
-    @apply rounded-2xl border border-ivory-200/70 bg-white/80 shadow-[0_4px_24px_-12px_rgba(23,32,51,0.06)] backdrop-blur-sm;
+    @apply rounded-2xl backdrop-blur-sm transition-shadow duration-300;
+    background: linear-gradient(165deg, #fffdf8 0%, #faf6ee 100%);
+    border: 1px solid rgba(200, 155, 60, 0.14);
+    box-shadow: 0 10px 32px -16px rgba(23, 32, 51, 0.1);
+  }
+
+  .sidebar-panel__header {
+    @apply flex items-center gap-2.5 px-4 py-3 border-b border-gold-500/10;
+  }
+
+  .sidebar-panel__title {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-muted;
+  }
+
+  .sidebar-panel__body {
+    @apply p-4;
+  }
+
+  .sidebar-list-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 border border-transparent;
+  }
+
+  .sidebar-list-link:hover {
+    @apply -translate-y-px;
+    background: linear-gradient(135deg, rgba(245, 230, 200, 0.45) 0%, rgba(255, 253, 248, 0.9) 100%);
+    border-color: rgba(200, 155, 60, 0.18);
+    box-shadow: 0 6px 16px -10px rgba(200, 155, 60, 0.35);
+  }
+
+  .sidebar-list-badge {
+    @apply flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl text-xs font-semibold shadow-icon-capsule;
+    background: linear-gradient(145deg, #fffef9 0%, #f5e6c8 100%);
+    border: 1px solid rgba(200, 155, 60, 0.22);
+    color: #b98225;
+  }
+
+  .sidebar-category-btn {
+    @apply w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-ink-muted transition-all duration-200 border border-transparent;
+  }
+
+  .sidebar-category-btn:hover {
+    background: rgba(245, 230, 200, 0.35);
+    border-color: rgba(200, 155, 60, 0.12);
+    @apply text-gold-600;
+  }
+
+  .sidebar-category-icon {
+    @apply flex h-7 w-7 items-center justify-center rounded-lg shadow-icon-capsule;
+    background: linear-gradient(145deg, #fffdf8 0%, #f8f1e7 100%);
+    border: 1px solid rgba(200, 155, 60, 0.15);
+    color: #c89b3c;
+  }
+
+  /* Naptár cellák */
+  .calendar-day {
+    @apply aspect-square rounded-xl flex items-center justify-center transition-all duration-300 relative;
+  }
+
+  .calendar-day--empty {
+    @apply text-ink-muted/45 cursor-default opacity-55 border border-transparent;
+  }
+
+  .calendar-day--filled {
+    @apply cursor-pointer font-semibold border;
+    background: linear-gradient(145deg, #fff9ee 0%, #f5e6c8 100%);
+    border-color: rgba(200, 155, 60, 0.32);
+    color: #b98225;
+    box-shadow: 0 4px 12px -6px rgba(200, 155, 60, 0.35);
+  }
+
+  .calendar-day--filled:hover {
+    @apply -translate-y-0.5;
+    border-color: rgba(200, 155, 60, 0.5);
+    box-shadow:
+      0 10px 24px -10px rgba(200, 155, 60, 0.45),
+      0 0 0 1px rgba(200, 155, 60, 0.15);
+  }
+
+  .calendar-day--today {
+    @apply ring-2 ring-gold-500/55 ring-offset-2 ring-offset-warm-bg;
+  }
+
+  .calendar-day--today.calendar-day--filled {
+    background: linear-gradient(145deg, #fff5dc 0%, #f0d080 100%);
+    border-color: rgba(185, 130, 37, 0.55);
+  }
+
+  .calendar-widget,
+  .calendar-day-link {
+    @apply relative z-10 pointer-events-auto;
+  }
+
+  .calendar-day-link {
+    @apply no-underline;
   }
 
   /* —— Site hero & layout containment —— */

@@ -16,15 +16,15 @@ const CATEGORIES = [
 export function CategoriesPanel() {
   return (
     <SidebarPanel title="Kategóriák">
-      <ul className="space-y-1.5">
+      <ul className="space-y-1">
         {CATEGORIES.map(({ label, icon: Icon }) => (
           <li key={label}>
             <button
               type="button"
-              className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm text-ink-muted transition-colors duration-200 hover:bg-amber-50/40 hover:text-gold-700"
+              className="sidebar-category-btn"
               aria-label={`${label} kategória — hamarosan`}
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-ivory-100/80 text-gold-600/75">
+              <span className="sidebar-category-icon">
                 <Icon className="w-3.5 h-3.5" />
               </span>
               {label}
@@ -32,7 +32,7 @@ export function CategoriesPanel() {
           </li>
         ))}
       </ul>
-      <p className="mt-4 text-[10px] text-ink-muted/60 text-center uppercase tracking-wider">
+      <p className="mt-3 text-[10px] text-ink-muted/55 text-center uppercase tracking-wider">
         Hamarosan
       </p>
     </SidebarPanel>

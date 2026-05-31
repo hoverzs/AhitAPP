@@ -30,15 +30,13 @@ const markdownComponents = {
   code: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   pre: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
   p: ({ children }: { children?: ReactNode }) => (
-    <p className="mb-5 last:mb-0 text-[1.0625rem] leading-[1.85] text-ink/90 font-serif">
-      {children}
-    </p>
+    <p>{children}</p>
   ),
   strong: ({ children }: { children?: ReactNode }) => (
-    <strong className="font-semibold text-ink not-italic">{children}</strong>
+    <strong>{children}</strong>
   ),
   em: ({ children }: { children?: ReactNode }) => (
-    <em className="italic text-ink/85 font-serif">{children}</em>
+    <em>{children}</em>
   ),
   blockquote: ({ children }: { children?: ReactNode }) => (
     <blockquote className="devotional-blockquote my-5">{children}</blockquote>

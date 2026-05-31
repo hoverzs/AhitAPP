@@ -45,7 +45,11 @@ export function getDevotionalByCalendarDate(
 
 /** Publikus áhítat URL — dátum alapú route. */
 export function getDevotionalRoute(devotional: Devotional): string {
-  return `/devotional/${devotionalDateKey(devotional)}`;
+  return getDevotionalHref(devotionalDateKey(devotional));
+}
+
+export function getDevotionalHref(dateIso: string): string {
+  return `/devotional/${dateIso}`;
 }
 
 export function getTodayDateIso(): string {

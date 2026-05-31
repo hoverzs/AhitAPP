@@ -8,7 +8,7 @@ import {
   buildPublishedDevotionalDateMap,
   formatCalendarDateIso,
   getDevotionalByCalendarDate,
-  getDevotionalRoute,
+  getDevotionalHref,
   getTodayDateIso,
   hasDevotional,
   isCalendarToday,
@@ -76,24 +76,7 @@ export function DevotionalCalendarMonth({
           const hasEntry = hasDevotional(dateIso, byDate);
           const isToday = isCalendarToday(year, month, day, todayIso);
 
-          const todayRing = isToday
-            ? isFull
-              ? "ring-2 ring-gold-400/60 ring-offset-2 ring-offset-white"
-              : "ring-2 ring-gold-500/70 ring-offset-2 ring-offset-ivory-50"
-            : "";
-
-          const baseClasses = isFull
-            ? "aspect-square rounded-xl sm:rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-all relative"
-            : "aspect-square rounded-xl flex items-center justify-center transition-all duration-300";
-
-          const emptyClasses = isFull
-            ? "bg-parchment-50/80 text-slate-400/70 border border-transparent cursor-default opacity-60"
-            : "text-ink-muted/50 border border-transparent cursor-default opacity-50";
-
-          const filledClasses = isFull
-            ? "bg-gradient-to-br from-amber-50 to-amber-100/90 text-gold-600 border border-gold-400/35 shadow-sm hover:shadow-md hover:border-gold-500/50 hover:from-amber-100 hover:to-amber-50 hover:scale-[1.02] cursor-pointer focus:outline-none focus:ring-2 focus:ring-gold-400/40"
-            : "bg-gradient-to-br from-amber-50/90 to-gold-500/15 text-gold-600 font-semibold border border-gold-500/25 hover:shadow-soft hover:border-gold-500/40 cursor-pointer";
-
+          const todayClass = isToday ? "calendar-day--today" : "";
           const dayLabel = isFull ? (
             <>
               <span
@@ -120,11 +103,16 @@ export function DevotionalCalendarMonth({
           );
 
           if (hasEntry && devotional) {
+            const href = getDevotionalHref(dateIso);
+
             return (
               <Link
                 key={dateIso}
-                href={getDevotionalRoute(devotional)}
-                className={`${baseClasses} ${filledClasses} ${todayRing}`}
+                href={href}
+                prefetch
+                className={`calendar-day calendar-day-link calendar-day--filled ${todayClass} ${
+                  isFull ? "flex-col gap-0.5" : ""
+                }`}
                 title={`${dateIso}: ${devotional.title}`}
                 role="gridcell"
                 aria-label={`${day}. — ${devotional.title}`}
@@ -137,7 +125,9 @@ export function DevotionalCalendarMonth({
           return (
             <div
               key={dateIso}
-              className={`${baseClasses} ${emptyClasses} ${todayRing}`}
+              className={`calendar-day calendar-day--empty ${todayClass} ${
+                isFull ? "flex-col gap-0.5" : ""
+              }`}
               role="gridcell"
               aria-disabled="true"
               aria-label={`${day}. — nincs közzétett áhítat`}

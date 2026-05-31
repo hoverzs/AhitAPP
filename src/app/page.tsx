@@ -7,7 +7,7 @@ import { CategoriesPanel } from "@/components/dashboard/CategoriesPanel";
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const { devotionals, latest } = await loadHomePageData();
+  const { devotionals, calendarDevotionals, latest } = await loadHomePageData();
 
   return (
     <div className="home-content">
@@ -18,7 +18,7 @@ export default async function HomePage() {
           </main>
 
           <aside className="xl:col-span-4 space-y-6 xl:space-y-8 animate-enter-delay-1">
-            <CalendarWidget devotionals={devotionals} />
+            <CalendarWidget devotionals={calendarDevotionals} />
             <RecentDevotionalsList devotionals={devotionals} />
             <CategoriesPanel />
           </aside>

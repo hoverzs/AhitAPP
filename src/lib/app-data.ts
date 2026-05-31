@@ -1,6 +1,7 @@
 import { readDevotionalsWithStatus } from "./devotionals";
 import { buildDevotionalMemory } from "./devotional-memory";
 import {
+  filterCalendarDevotionals,
   filterPublicDevotionals,
   isPendingReview,
   normalizeDevotional,
@@ -24,6 +25,8 @@ import type { DevotionalMemory } from "./devotional-memory";
 
 export interface HomePageData {
   devotionals: Devotional[];
+  /** Naptár — published + tartalom (lazább szűrés, mint a főoldali featured). */
+  calendarDevotionals: Devotional[];
   latest: Devotional | null;
   displayVerse: DisplayVerse;
   featuredVerse: DisplayVerse;
@@ -32,6 +35,7 @@ export interface HomePageData {
 
 const EMPTY_HOME: HomePageData = {
   devotionals: [],
+  calendarDevotionals: [],
   latest: null,
   displayVerse: { ...STATIC_DISPLAY_VERSE },
   featuredVerse: { ...STATIC_DISPLAY_VERSE },
@@ -42,6 +46,7 @@ export async function loadHomePageData(): Promise<HomePageData> {
   try {
     const { devotionals: all } = await readDevotionalsWithStatus();
     const devotionals = filterPublicDevotionals(all);
+    const calendarDevotionals = filterCalendarDevotionals(all);
     const latest = getLatestDevotional(devotionals);
     const recent = getRecentDevotionals(devotionals, 3);
 
@@ -61,6 +66,7 @@ export async function loadHomePageData(): Promise<HomePageData> {
 
     return {
       devotionals,
+      calendarDevotionals,
       latest,
       displayVerse,
       featuredVerse,
