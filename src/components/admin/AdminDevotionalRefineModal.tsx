@@ -251,7 +251,7 @@ export function AdminDevotionalRefineModal({
                     </p>
                     <p className="text-sm text-gold-600/90 mb-1">{refined.category}</p>
                     <p className="text-xs text-ink-muted mb-4">{refined.verse}</p>
-                    <DevotionalContent content={refined.content} verse={refined.verse} />
+                    <DevotionalContent content={refined.content} verse={refined.verse} title={refined.title} />
                     {updateImageKeywords && refined.imageKeywords && (
                       <p className="mt-4 text-xs text-ink-muted border-t border-ivory-100 pt-3">
                         Új kép kulcsszavak:{" "}
@@ -266,7 +266,7 @@ export function AdminDevotionalRefineModal({
                     </p>
                     <p className="text-sm text-gold-600/90 mb-1">{devotional.category}</p>
                     <p className="text-xs text-ink-muted mb-4">{devotional.verse}</p>
-                    <DevotionalContent content={devotional.content} verse={devotional.verse} />
+                    <DevotionalContent content={devotional.content} verse={devotional.verse} title={devotional.title} />
                   </>
                 )}
               </div>

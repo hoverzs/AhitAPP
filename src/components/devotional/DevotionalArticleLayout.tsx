@@ -38,7 +38,7 @@ export function DevotionalArticleLayout({
   showHeader = true,
   priorityImage = false,
 }: DevotionalArticleLayoutProps) {
-  const sections = getDevotionalSections(content, verse);
+  const sections = getDevotionalSections(content, verse, title);
   const alapige = sections.find((s) => s.id === "alapige");
   const bodySections = sections.filter((s) => s.id !== "alapige");
   const showCredit = hasAssignedDevotionalImage(imageUrl);

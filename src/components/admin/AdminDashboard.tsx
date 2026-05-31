@@ -842,7 +842,7 @@ export function AdminDashboard({
                 />
 
                 <div className="p-6 md:p-10 max-w-3xl mx-auto">
-                  <DevotionalContent content={preview.content} verse={preview.verse} />
+                  <DevotionalContent content={preview.content} verse={preview.verse} title={preview.title} />
 
                   <div className="mt-10 pt-8 border-t border-ivory-200 flex justify-center">
                     <CopyButton

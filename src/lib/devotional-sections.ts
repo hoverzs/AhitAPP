@@ -1,4 +1,5 @@
 import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+import { stripDuplicateDevotionalTitle } from "./devotional-title-dedup";
 import {
   deduplicateScripture,
   formatCanonicalScriptureBlockquote,
@@ -91,6 +92,8 @@ export function parseDevotionalSections(
     /** @deprecated Használd verse — ugyanaz mint devotional.scripture */
     scripture?: string;
     prependVerseAsAlapige?: boolean;
+    /** Ha megvan, az ige alatti ismétlődő cím kiszűrése. */
+    title?: string;
   }
 ): DevotionalSection[] {
   const sections: DevotionalSection[] = [];
@@ -114,16 +117,18 @@ export function parseDevotionalSections(
   }
 
   if (!trimmed) {
-    return enrichSectionsWithTolerantMeditation(content.trim(), sections);
+    return finalizeSections(content.trim(), sections, options?.title);
   }
 
   const headerRegex = /^#{1,6}\s+(.+)$/gm;
   const matches = [...trimmed.matchAll(headerRegex)];
 
   if (matches.length === 0) {
-    const body = trimmed;
+    const body = stripDuplicateDevotionalTitle(trimmed, options?.title);
     if (sections.some((s) => s.id === "alapige")) {
-      sections[0].body = `${sections[0].body}\n\n${body}`.trim();
+      if (body) {
+        sections[0].body = `${sections[0].body}\n\n${body}`.trim();
+      }
     } else {
       sections.push({
         id: options?.verse ? "egyeb" : "alapige",
@@ -131,11 +136,14 @@ export function parseDevotionalSections(
         body,
       });
     }
-    return sections;
+    return finalizeSections(content.trim(), sections, options?.title);
   }
 
   const firstHeaderIndex = matches[0].index ?? 0;
-  const preamble = trimmed.slice(0, firstHeaderIndex).trim();
+  const preamble = stripDuplicateDevotionalTitle(
+    trimmed.slice(0, firstHeaderIndex).trim(),
+    options?.title
+  );
 
   if (preamble) {
     const alapige = sections.find((s) => s.id === "alapige");
@@ -180,10 +188,26 @@ export function parseDevotionalSections(
     sections.push({ id, title, body });
   }
 
-  return enrichSectionsWithTolerantMeditation(
+  return finalizeSections(
     useExternalScripture ? content.trim() : trimmed,
-    sections
+    sections,
+    options?.title
   );
+}
+
+function finalizeSections(
+  content: string,
+  sections: DevotionalSection[],
+  title?: string
+): DevotionalSection[] {
+  const enriched = enrichSectionsWithTolerantMeditation(content, sections);
+  return enriched.map((section) => {
+    if (section.id !== "alapige" || !title?.trim()) return section;
+    return {
+      ...section,
+      body: stripDuplicateDevotionalTitle(section.body, title),
+    };
+  }).filter((s) => s.body.length > 0);
 }
 
 /**

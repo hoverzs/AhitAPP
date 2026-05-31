@@ -5,17 +5,20 @@ import {
 } from "@/lib/devotional-sections";
 import { DevotionalMarkdown } from "./DevotionalMarkdown";
 import { DevotionalSectionIcon } from "./DevotionalSectionIcon";
+import { ScriptureDisplay } from "./ScriptureDisplay";
 
 interface DevotionalContentProps {
   content: string;
   verse?: string;
+  title?: string;
 }
 
-export function getDevotionalSections(content: string, verse?: string) {
+export function getDevotionalSections(content: string, verse?: string, title?: string) {
   return parseDevotionalSections(content, {
     verse,
     scripture: verse,
     prependVerseAsAlapige: Boolean(verse?.trim()),
+    title,
   });
 }
 
@@ -46,14 +49,18 @@ export function DevotionalSectionCard({ section }: { section: DevotionalSection 
         <DevotionalSectionIcon sectionId={section.id} />
         <h2 className="devotional-section-card__title">{section.title}</h2>
       </header>
-      <DevotionalMarkdown source={section.body} sectionId={section.id} />
+      {section.id === "alapige" ? (
+        <ScriptureDisplay source={section.body} />
+      ) : (
+        <DevotionalMarkdown source={section.body} sectionId={section.id} />
+      )}
     </section>
   );
 }
 
 /** Admin / egyszerű stack — minden szekció egymás alatt. */
-export function DevotionalContent({ content, verse }: DevotionalContentProps) {
-  const sections = getDevotionalSections(content, verse);
+export function DevotionalContent({ content, verse, title }: DevotionalContentProps) {
+  const sections = getDevotionalSections(content, verse, title);
 
   if (sections.length === 0) {
     return (

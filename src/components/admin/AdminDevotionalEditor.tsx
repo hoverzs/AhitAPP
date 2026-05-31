@@ -171,14 +171,14 @@ export function AdminDevotionalEditor({ fields, onChange }: AdminDevotionalEdito
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gold-600 mb-5">
               Élő előnézet
             </p>
-            <DevotionalContent content={previewContent} verse={fields.verse} />
+            <DevotionalContent content={previewContent} verse={fields.verse} title={fields.title} />
           </div>
         </div>
       )}
 
       {view === "preview" && (
         <div className="admin-editor-preview max-w-3xl mx-auto">
-          <DevotionalContent content={previewContent} verse={fields.verse} />
+          <DevotionalContent content={previewContent} verse={fields.verse} title={fields.title} />
         </div>
       )}
     </div>
