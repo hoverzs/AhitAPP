@@ -52,17 +52,18 @@ const config: Config = {
       },
       boxShadow: {
         soft: "0 4px 24px -4px rgba(23, 32, 51, 0.07)",
-        card: "0 14px 44px -14px rgba(23, 32, 51, 0.12), 0 0 0 1px rgba(200, 155, 60, 0.06)",
+        card:
+          "0 18px 45px rgba(23, 32, 51, 0.08), 0 2px 8px rgba(201, 161, 90, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.75)",
         "card-hover":
-          "0 22px 52px -18px rgba(23, 32, 51, 0.16), 0 0 0 1px rgba(200, 155, 60, 0.14), 0 8px 24px -8px rgba(200, 155, 60, 0.12)",
+          "0 22px 52px rgba(23, 32, 51, 0.11), 0 4px 12px rgba(201, 161, 90, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.75)",
         glass:
           "0 8px 32px -8px rgba(23, 32, 51, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.65)",
         glow: "0 4px 20px -4px rgba(200, 155, 60, 0.4)",
         "glow-lg": "0 8px 28px -4px rgba(200, 155, 60, 0.5)",
         premium:
-          "0 16px 48px -20px rgba(23, 32, 51, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+          "0 18px 45px rgba(23, 32, 51, 0.08), 0 2px 8px rgba(201, 161, 90, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.75)",
         "icon-capsule":
-          "0 2px 8px -2px rgba(185, 130, 37, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.85)",
+          "0 6px 16px rgba(201, 161, 90, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7)",
       },
       keyframes: {
         "fade-up": {

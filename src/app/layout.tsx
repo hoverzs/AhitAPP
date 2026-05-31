@@ -19,7 +19,7 @@ export default async function RootLayout({
 }>) {
   return (
     <html lang="hu">
-      <body className="min-h-screen flex flex-col bg-ivory-50 overflow-x-hidden">
+      <body className="min-h-screen flex flex-col overflow-x-hidden">
         <SiteHeaderWrapper />
         <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">{children}</main>
         <SiteFooter />
