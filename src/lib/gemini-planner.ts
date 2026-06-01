@@ -48,6 +48,7 @@ import {
 } from "./planned-day-mapper";
 import {
   geminiGenerateContentRestDetailed,
+  GeminiResponseError,
   isGeminiResponseError,
   isRetriableGeminiResponseError,
   logRawGeminiResponse,
@@ -116,7 +117,8 @@ async function fetchMetadata(
 
   for (let attempt = 1; attempt <= METADATA_MAX_ATTEMPTS; attempt++) {
     try {
-      const { text: raw } = await geminiGenerateContentRestDetailed({
+      const { text: raw, finishReason, usageMetadata } =
+        await geminiGenerateContentRestDetailed({
         model: GEMINI_PLANNER_MODEL,
         systemInstruction: METADATA_SYSTEM_PROMPT,
         userPrompt: buildMetadataUserPrompt(memory, {
@@ -126,10 +128,47 @@ async function fetchMetadata(
           temperature: GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
           responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 },
         },
         logContext: `planAndGenerateNextDay/metadata-${attempt}`,
         maxAttempts: 1,
       });
+
+      console.error(
+        "[metadata-generation:debug] Gemini metadata response metrics",
+        JSON.stringify(
+          {
+            attempt,
+            maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
+            thinkingBudget: 0,
+            finishReason,
+            thoughtsTokenCount: usageMetadata?.thoughtsTokenCount ?? null,
+            candidatesTokenCount: usageMetadata?.candidatesTokenCount ?? null,
+            promptTokenCount: usageMetadata?.promptTokenCount ?? null,
+            totalTokenCount: usageMetadata?.totalTokenCount ?? null,
+            rawChars: raw.length,
+          },
+          null,
+          2
+        )
+      );
+
+      if (isGeminiOutputTruncated(finishReason)) {
+        throw new GeminiResponseError({
+          issue: "MAX_TOKENS",
+          finishReason,
+          diagnostics: [
+            "metadata_json=true",
+            `maxOutputTokens=${GEMINI_METADATA_MAX_OUTPUT_TOKENS}`,
+            `thoughtsTokenCount=${usageMetadata?.thoughtsTokenCount ?? "n/a"}`,
+            `candidatesTokenCount=${usageMetadata?.candidatesTokenCount ?? "n/a"}`,
+            `rawChars=${raw.length}`,
+          ].join(", "),
+          partialText: raw,
+          message:
+            "Gemini metadata JSON generation reached MAX_TOKENS before a complete JSON object was available.",
+        });
+      }
 
       const metadata = parseMetadataJson(raw);
 
@@ -138,6 +177,9 @@ async function fetchMetadata(
         title: metadata.title,
         category: metadata.category,
         maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
+        finishReason,
+        thoughtsTokenCount: usageMetadata?.thoughtsTokenCount,
+        candidatesTokenCount: usageMetadata?.candidatesTokenCount,
       });
       return metadata;
     } catch (error) {

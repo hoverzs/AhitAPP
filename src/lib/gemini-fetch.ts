@@ -78,12 +78,16 @@ export interface GeminiGenerationConfig {
   maxOutputTokens?: number;
   responseMimeType?: string;
   responseSchema?: Record<string, unknown>;
+  thinkingConfig?: { thinkingBudget: number };
 }
 
 export type ResolvedGenerationConfig = Required<
   Pick<GeminiGenerationConfig, "temperature" | "maxOutputTokens">
 > &
-  Pick<GeminiGenerationConfig, "responseMimeType" | "responseSchema">;
+  Pick<
+    GeminiGenerationConfig,
+    "responseMimeType" | "responseSchema" | "thinkingConfig"
+  >;
 
 /** Mindig legyen maxOutputTokens — üres {} esetén is (korábban kimaradhatott). */
 export function resolveGenerationConfig(
@@ -99,6 +103,9 @@ export function resolveGenerationConfig(
   }
   if (partial?.responseSchema) {
     resolved.responseSchema = partial.responseSchema;
+  }
+  if (partial?.thinkingConfig) {
+    resolved.thinkingConfig = partial.thinkingConfig;
   }
 
   return resolved;
@@ -502,6 +509,7 @@ async function geminiGenerateContentRestDetailedInner(params: {
         maxOutputTokens: base.maxOutputTokens,
         responseMimeType: base.responseMimeType,
         responseSchema: base.responseSchema,
+        thinkingConfig: base.thinkingConfig,
       });
       if (base.responseMimeType === "application/json") {
         userPrompt = `${params.userPrompt}\n\nReturn compact JSON only. Shorter content field.`;

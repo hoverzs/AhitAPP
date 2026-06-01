@@ -7,7 +7,6 @@ import {
 import { repairTruncatedJsonObject } from "./gemini-fetch";
 import type { DynamicPlannedDay } from "./types";
 
-const DEFAULT_SCRIPTURE = "Zsoltárok 23:1 — Az Úr az én pásztorom";
 const DEFAULT_CATEGORY = "Békesség";
 const DEFAULT_PRAYER =
   "Uram, add meg a mai napomhoz a szükséges békét és figyelmességet. Vezess minden lépésemben. Ámen.";
@@ -109,8 +108,12 @@ export function buildFallbackPlannedDay(
     `A ${expectedDay}. nap áhítata`;
   const scripture =
     extractField(raw, "scripture") ||
-    extractField(raw, "verse") ||
-    DEFAULT_SCRIPTURE;
+    extractField(raw, "verse");
+  if (!scripture) {
+    throw new Error(
+      "Fallback planner cannot build a devotional without a scripture field."
+    );
+  }
   const category =
     extractField(raw, "category") ||
     options?.categoryHint?.trim() ||

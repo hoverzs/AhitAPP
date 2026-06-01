@@ -5,7 +5,7 @@ export const GEMINI_PLANNER_MODEL = "gemini-2.5-flash";
 export const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
 
 /** 1. lépés — metadata JSON (rövid) */
-export const GEMINI_METADATA_MAX_OUTPUT_TOKENS = 600;
+export const GEMINI_METADATA_MAX_OUTPUT_TOKENS = 4096;
 
 /** 2. lépés — áhítat markdown (plain text) */
 export const GEMINI_BODY_MAX_OUTPUT_TOKENS = 2500;

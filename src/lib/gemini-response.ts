@@ -18,6 +18,7 @@ export interface GenerateContentResponse {
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
+    thoughtsTokenCount?: number;
     totalTokenCount?: number;
   };
   error?: { message?: string; code?: number; status?: string };
@@ -83,6 +84,9 @@ export function buildGeminiResponseDiagnostics(
     usage?.candidatesTokenCount != null
       ? `outputTokens≈${usage.candidatesTokenCount}`
       : null,
+    usage?.thoughtsTokenCount != null
+      ? `thoughtsTokens≈${usage.thoughtsTokenCount}`
+      : null,
     data.promptFeedback?.blockReason
       ? `promptBlock=${data.promptFeedback.blockReason}`
       : null,
@@ -104,6 +108,7 @@ function collectTextFromParts(
 export interface ExtractedGeminiText {
   text: string;
   finishReason: string;
+  usageMetadata?: GenerateContentResponse["usageMetadata"];
 }
 
 export function extractGeminiCandidateText(
@@ -204,7 +209,7 @@ export function extractGeminiCandidateText(
     );
   }
 
-  return { text, finishReason };
+  return { text, finishReason, usageMetadata: data.usageMetadata };
 }
 
 /** Gemini levágta a kimenetet tokenlimit miatt. */
