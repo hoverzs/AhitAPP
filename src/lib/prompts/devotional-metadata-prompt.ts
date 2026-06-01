@@ -11,8 +11,6 @@ ${SCRIPTURE_SELECTION_GUIDELINES}
 
 A scripture mezőben adj teljes alapigét: „Könyv fejezet:vers — rövid magyar szöveg” (1–3 mondat, szó szerinti vagy közérthető fordítás).
 
-SOHA ne válassz olyan igehelyet, amely szerepel a „már használt igehelyek” listában.
-
 KIMENET — egyetlen JSON objektum, { kezdet } { vég }, NINCS kódblokk:
 {
   "title": "rövid cím",
@@ -43,8 +41,8 @@ ${usedBlock}
 További kontextus (napok, kategóriák):
 ${memory.summaryForPrompt}
 
-Válassz új, még nem használt alapigét a fenti irányelvek és a tiltott lista szerint.
-Ne válassz túl gyakori áhítatos alapigét, ha kevésbé kézenfekvő szakasz is illik.
+Válassz alapigét a fenti irányelvek szerint.
+Prefer less obvious but biblically meaningful passages when appropriate. Avoid overusing the most common devotional verses, but do not force obscure passages at the expense of theological clarity, relevance, or natural flow.
 Tartsd a sorozat tematikus/logikai ívét (kategória, nap száma).
 Csak a 5 mezős JSON. Ne írj áhítat szöveget.${rejectionsBlock}`;
 }

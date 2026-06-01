@@ -78,7 +78,6 @@ export function buildDevotionalMemory(
     totalPublished: sorted.length,
     maxDayNumber,
     nextDayNumber,
-    usedVerseReferences,
     usedTitles,
     usedCategories,
     recentDays,

@@ -36,11 +36,11 @@ export function buildUsedVerseReferencesPromptBlock(
   }
 
   const lines = memory.usedVerseReferences.map((ref) => `- ${ref}`).join("\n");
-  return `KORÁBBAN MÁR HASZNÁLT IGEHELYEK (TILOS újra választani — se szó szerint, se ugyanaz a könyv:fejezet:vers):
+  return `KORÁBBAN MÁR HASZNÁLT IGEHELYEK (TILOS újra választani — azonos könyv-fejezet-vers hivatkozásként):
 ${lines}
 
 A scripture mezőben szereplő hivatkozás legyen ettől a listától eltérő.
-Keress kevésbé kézenfekvő, de erős alapigét; ne válassz túl gyakori áhítatos slágerszakaszt.`;
+Prefer less obvious but biblically meaningful passages when appropriate. Avoid overusing the most common devotional verses, but do not force obscure passages at the expense of theological clarity, relevance, or natural flow.`;
 }
 
 /** Egyedi retry instrukció a legutóbb elutasított igehelyre. */
@@ -49,7 +49,7 @@ export function buildDuplicateVerseRetryPromptBlock(reference: string): string {
 
 FONTOS — DUPLIKÁTUM:
 A(z) „${reference}” igehely már szerepelt korábban ebben az áhítatsorozatban.
-Válassz MÁSIK, még nem használt bibliai igét, lehetőleg kevésbé gyakori szakaszt.
+Válassz MÁSIK, még nem használt bibliai igét.
 A passage ${reference} has already been used. Choose a different Bible passage that has not appeared before.
 Tartsd meg ugyanazt a nap számát, tematikus irányt, kategória logikát és stílust — csak az alapige legyen új.`;
 }
