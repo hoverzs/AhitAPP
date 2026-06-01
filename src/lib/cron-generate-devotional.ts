@@ -9,6 +9,7 @@ import {
 } from "./generate-devotional";
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import { getDevotionalByDate, getTodayDateIso } from "./generation-target";
+import { isGeminiOverloadError } from "./gemini-overload-retry";
 import { isPexelsConfigured } from "./pexels";
 import { getAppTodayIso, logAppDateDebug } from "./app-date";
 
@@ -46,8 +47,10 @@ function cronError(message: string, meta?: Record<string, unknown>): void {
 
 function isRetriableGenerationError(error: unknown): boolean {
   if (error instanceof GenerationSkippedError) return false;
+  if (isGeminiOverloadError(error)) return true;
   const details = toGeminiErrorDetails(error);
   return (
+    details.code === "GEMINI_OVERLOAD" ||
     details.code === "NETWORK" ||
     details.code === "MAX_TOKENS" ||
     details.code === "API_HTTP" ||

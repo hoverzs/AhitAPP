@@ -32,6 +32,7 @@ import { statusLabelHu } from "@/lib/devotional-status";
 import { CopyButton } from "@/components/CopyButton";
 import { formatDevotionalForFacebook, getPublicDevotionalUrl } from "@/lib/facebook";
 import { getGeminiErrorTitle } from "@/lib/gemini-error-labels";
+import { useGeminiLoadingMessage } from "@/hooks/useGeminiLoadingMessage";
 
 interface AdminDashboardProps {
   memory: DevotionalMemory;
@@ -94,6 +95,10 @@ export function AdminDashboard({
   const [confirmRegenerateDay, setConfirmRegenerateDay] = useState<number | null>(null);
   const [refineDay, setRefineDay] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const geminiLoadingActive =
+    loading || todayCronLoading || regenerateLoading !== null;
+  const geminiLoadingMessage = useGeminiLoadingMessage(geminiLoadingActive);
 
   const preview = selectedDay != null ? devotionalsByDay.get(selectedDay) ?? null : null;
 
@@ -210,20 +215,26 @@ export function AdminDashboard({
       };
 
       if (!res.ok || !data.success) {
-        const friendlyError = data.code
-          ? `${getGeminiErrorTitle(data.code)}. Próbáld újra később, vagy ellenőrizd az API beállításokat.`
-          : (data.error ?? "A mai áhítat generálása sikertelen.");
+        const friendlyError =
+          data.code === "GEMINI_OVERLOAD"
+            ? (data.hint ??
+              "A Gemini szervere átmenetileg túlterhelt. Automatikus újrapróbák után sem sikerült — várj 1–2 percet.")
+            : data.code
+              ? `${getGeminiErrorTitle(data.code)}. Próbáld újra később, vagy ellenőrizd az API beállításokat.`
+              : (data.error ?? "A mai áhítat generálása sikertelen.");
         setError({
           error: friendlyError,
           hint:
             data.hint ??
-            (data.code === "NETWORK" || data.code === "TLS_CERTIFICATE"
-              ? "Ellenőrizd a hálózati kapcsolatot, majd próbáld újra."
-              : data.code === "API_KEY"
-                ? "Ellenőrizd a GEMINI_API_KEY környezeti változót."
-                : data.code
-                  ? "Ha a hiba tartós, nézd meg a szerver naplókat."
-                  : undefined),
+            (data.code === "GEMINI_OVERLOAD"
+              ? "A szerver 3× automatikusan újrapróbálta (3 s, 8 s, 15 s várakozással)."
+              : data.code === "NETWORK" || data.code === "TLS_CERTIFICATE"
+                ? "Ellenőrizd a hálózati kapcsolatot, majd próbáld újra."
+                : data.code === "API_KEY"
+                  ? "Ellenőrizd a GEMINI_API_KEY környezeti változót."
+                  : data.code
+                    ? "Ha a hiba tartós, nézd meg a szerver naplókat."
+                    : undefined),
           code: data.code,
         });
         return;
@@ -271,7 +282,13 @@ export function AdminDashboard({
 
       if (!res.ok) {
         setError({
-          error: data.error ?? "Generálás sikertelen.",
+          error:
+            data.code === "DUPLICATE_VERSE"
+              ? (data.error ??
+                "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.")
+              : data.code === "GEMINI_OVERLOAD"
+              ? (data.hint ?? data.error ?? "A Gemini átmenetileg túlterhelt.")
+              : (data.error ?? "Generálás sikertelen."),
           hint: data.hint,
           code: data.code,
           tlsMode: data.tlsMode,
@@ -326,7 +343,13 @@ export function AdminDashboard({
 
       if (!res.ok) {
         setError({
-          error: data.error ?? "Újragenerálás sikertelen.",
+          error:
+            data.code === "DUPLICATE_VERSE"
+              ? (data.error ??
+                "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.")
+              : data.code === "GEMINI_OVERLOAD"
+              ? (data.hint ?? data.error ?? "A Gemini átmenetileg túlterhelt.")
+              : (data.error ?? "Újragenerálás sikertelen."),
           hint: data.hint,
           code: data.code,
         });
@@ -558,8 +581,8 @@ export function AdminDashboard({
               </div>
 
               {loading && (
-                <p className="mt-5 text-sm text-ink-muted">
-                  Gemini szöveg + automatikus Pexels kép keresés — kb. 30–90 másodperc.
+                <p className="mt-5 text-sm text-ink-muted" role="status" aria-live="polite">
+                  {geminiLoadingMessage}
                 </p>
               )}
 
@@ -601,8 +624,8 @@ export function AdminDashboard({
                 </AdminButton>
 
                 {todayCronLoading && (
-                  <p className="mt-4 text-sm text-ink-muted">
-                    Gemini szöveg + automatikus Pexels kép keresés — kb. 30–90 másodperc.
+                  <p className="mt-4 text-sm text-ink-muted" role="status" aria-live="polite">
+                    {geminiLoadingMessage}
                   </p>
                 )}
 
@@ -650,6 +673,16 @@ export function AdminDashboard({
             </AdminPanel>
           </div>
         </div>
+
+        {geminiLoadingActive && !error && (
+          <p
+            className="mb-6 text-sm text-ink-muted rounded-xl bg-ivory-50 border border-ivory-200 px-4 py-3"
+            role="status"
+            aria-live="polite"
+          >
+            {geminiLoadingMessage}
+          </p>
+        )}
 
         {error && (
           <AdminErrorAlert

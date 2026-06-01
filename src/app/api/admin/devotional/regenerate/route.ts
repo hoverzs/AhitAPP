@@ -8,6 +8,7 @@ import {
   regenerateDevotional,
   GenerationBlockedError,
 } from "@/lib/generate-devotional";
+import { isDuplicateVerseExhaustedError } from "@/lib/duplicate-verse-retry";
 import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
@@ -46,6 +47,18 @@ export async function POST(request: Request) {
 
     if (err instanceof GenerationBlockedError) {
       return NextResponse.json({ error: err.reason, code: "GENERATION_BLOCKED" }, { status: 409 });
+    }
+
+    if (isDuplicateVerseExhaustedError(err)) {
+      return NextResponse.json(
+        {
+          error: err.message,
+          code: "DUPLICATE_VERSE",
+          hint: "A modell háromszor is ismételt igehelyet választott. Próbáld újra.",
+          rejectedReferences: err.rejectedReferences,
+        },
+        { status: 409 }
+      );
     }
 
     logGeminiError(err, "POST /api/admin/devotional/regenerate");

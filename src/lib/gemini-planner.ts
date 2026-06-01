@@ -26,7 +26,13 @@ import {
   METADATA_SYSTEM_PROMPT,
 } from "./prompts/devotional-metadata-prompt";
 import type { DevotionalMemory } from "./devotional-memory";
-import { isVerseReferenceUsed, extractVerseReference } from "./devotional-memory";
+import { extractVerseReference, isVerseReferenceUsed } from "./devotional-memory";
+import {
+  DUPLICATE_VERSE_MAX_ATTEMPTS,
+  DuplicateVerseExhaustedError,
+  isForbiddenVerseReference,
+  logDuplicateVerseAttempt,
+} from "./duplicate-verse-retry";
 import type { DynamicPlannedDay } from "./types";
 import { logGeminiError } from "./gemini-client";
 import {
@@ -63,6 +69,9 @@ type PlannerLogEvent =
   | "body_incomplete"
   | "body_fallback"
   | "assemble_success"
+  | "duplicate_scripture"
+  | "duplicate_scripture_retry"
+  | "duplicate_scripture_exhausted"
   | "failure";
 
 function plannerLog(
@@ -76,17 +85,8 @@ function plannerLog(
 
 function finalizePlanned(
   planned: DynamicPlannedDay,
-  memory: DevotionalMemory,
   meta: Record<string, unknown>
 ): DynamicPlannedDay {
-  const ref = extractVerseReference(planned.verse);
-
-  if (isVerseReferenceUsed(ref, memory.usedVerseReferences)) {
-    throw new Error(
-      `A generált vers már szerepelt a múltban: ${ref}. Próbáld újra a generálást.`
-    );
-  }
-
   plannerLog("assemble_success", {
     dayNumber: planned.dayNumber,
     title: planned.title,
@@ -98,9 +98,13 @@ function finalizePlanned(
 }
 
 async function fetchMetadata(
-  memory: DevotionalMemory
+  memory: DevotionalMemory,
+  options?: { rejectedReferencesThisRun?: string[] }
 ): Promise<DevotionalMetadata> {
-  plannerLog("metadata_start", { dayNumber: memory.nextDayNumber });
+  plannerLog("metadata_start", {
+    dayNumber: memory.nextDayNumber,
+    duplicateRejections: options?.rejectedReferencesThisRun?.length ?? 0,
+  });
   let lastMetadataError: unknown;
 
   for (let attempt = 1; attempt <= METADATA_MAX_ATTEMPTS; attempt++) {
@@ -108,7 +112,9 @@ async function fetchMetadata(
       const { text: raw } = await geminiGenerateContentRestDetailed({
         model: GEMINI_PLANNER_MODEL,
         systemInstruction: METADATA_SYSTEM_PROMPT,
-        userPrompt: buildMetadataUserPrompt(memory),
+        userPrompt: buildMetadataUserPrompt(memory, {
+          rejectedReferencesThisRun: options?.rejectedReferencesThisRun,
+        }),
         generationConfig: {
           temperature: GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens: GEMINI_METADATA_MAX_OUTPUT_TOKENS,
@@ -370,6 +376,7 @@ async function fetchDevotionalMarkdown(
 
 /**
  * Kétlépcsős generálás: (A) rövid metadata JSON → (B) plain markdown áhítat.
+ * Duplikált igehely esetén automatikus újrapróba (max. 3×).
  */
 export async function planAndGenerateNextDay(
   memory: DevotionalMemory
@@ -378,82 +385,160 @@ export async function planAndGenerateNextDay(
     dayNumber: memory.nextDayNumber,
     strategy: "two_step",
     bodyGenerator: BODY_SOURCE_FUNCTION,
+    duplicateVerseMaxAttempts: DUPLICATE_VERSE_MAX_ATTEMPTS,
   });
 
-  try {
-    const metadata = await fetchMetadata(memory);
-    const {
-      markdown: devotionalMarkdown,
-      textComplete,
-      incompleteReasons,
-      generationDiagnostics,
-    } = await fetchDevotionalMarkdown(metadata, memory);
+  const rejectedThisRun: string[] = [];
 
-    const planned = assemblePlannedDayFromParts(
-      {
-        title: metadata.title,
-        scripture: metadata.scripture,
-        category: metadata.category,
-        excerpt: metadata.excerpt,
-        devotionalMarkdown,
-        imageKeywords: metadata.imageKeywords,
-      },
-      memory.nextDayNumber
-    );
-
-    const complete = textComplete;
-
-    if (!complete) {
-      plannerLog("body_incomplete", {
-        phase: "pre_save",
-        sourceFunction: BODY_SOURCE_FUNCTION,
-        reasons: incompleteReasons,
-        finishReason: generationDiagnostics.finishReason,
+  for (
+    let dupAttempt = 1;
+    dupAttempt <= DUPLICATE_VERSE_MAX_ATTEMPTS;
+    dupAttempt++
+  ) {
+    try {
+      const metadata = await fetchMetadata(memory, {
+        rejectedReferencesThisRun: rejectedThisRun,
       });
-    }
 
-    return finalizePlanned(
-      {
-        ...planned,
-        textComplete: complete,
-        generationReviewMessage: complete
-          ? undefined
-          : TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
-        generationDiagnostics,
-      },
-      memory,
-      {
-        strategy: "two_step",
-        textComplete: complete,
-        finishReason: generationDiagnostics.finishReason,
-        maxOutputTokens: generationDiagnostics.maxOutputTokens,
-        retryOccurred: generationDiagnostics.retryOccurred,
+      const metadataRef = extractVerseReference(metadata.scripture);
+      if (
+        isForbiddenVerseReference(metadataRef, memory, rejectedThisRun)
+      ) {
+        logDuplicateVerseAttempt("planAndGenerateNextDay", {
+          attempt: dupAttempt,
+          maxAttempts: DUPLICATE_VERSE_MAX_ATTEMPTS,
+          reference: metadataRef,
+          phase: "metadata",
+        });
+        plannerLog("duplicate_scripture", {
+          attempt: dupAttempt,
+          reference: metadataRef,
+          phase: "metadata",
+        });
+
+        if (!isVerseReferenceUsed(metadataRef, rejectedThisRun)) {
+          rejectedThisRun.push(metadataRef);
+        }
+
+        if (dupAttempt < DUPLICATE_VERSE_MAX_ATTEMPTS) {
+          plannerLog("duplicate_scripture_retry", {
+            attempt: dupAttempt + 1,
+            rejected: rejectedThisRun,
+          });
+          continue;
+        }
+
+        plannerLog("duplicate_scripture_exhausted", {
+          rejected: rejectedThisRun,
+        });
+        throw new DuplicateVerseExhaustedError(rejectedThisRun);
       }
-    );
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes("szerepelt a múltban")
-    ) {
-      throw error;
+
+      const {
+        markdown: devotionalMarkdown,
+        textComplete,
+        incompleteReasons,
+        generationDiagnostics,
+      } = await fetchDevotionalMarkdown(metadata, memory);
+
+      const planned = assemblePlannedDayFromParts(
+        {
+          title: metadata.title,
+          scripture: metadata.scripture,
+          category: metadata.category,
+          excerpt: metadata.excerpt,
+          devotionalMarkdown,
+          imageKeywords: metadata.imageKeywords,
+        },
+        memory.nextDayNumber
+      );
+
+      const verseRef = extractVerseReference(planned.verse);
+      if (isForbiddenVerseReference(verseRef, memory, rejectedThisRun)) {
+        logDuplicateVerseAttempt("planAndGenerateNextDay", {
+          attempt: dupAttempt,
+          maxAttempts: DUPLICATE_VERSE_MAX_ATTEMPTS,
+          reference: verseRef,
+          phase: "assembled",
+        });
+        plannerLog("duplicate_scripture", {
+          attempt: dupAttempt,
+          reference: verseRef,
+          phase: "assembled",
+        });
+
+        if (!isVerseReferenceUsed(verseRef, rejectedThisRun)) {
+          rejectedThisRun.push(verseRef);
+        }
+
+        if (dupAttempt < DUPLICATE_VERSE_MAX_ATTEMPTS) {
+          plannerLog("duplicate_scripture_retry", {
+            attempt: dupAttempt + 1,
+            rejected: rejectedThisRun,
+          });
+          continue;
+        }
+
+        plannerLog("duplicate_scripture_exhausted", {
+          rejected: rejectedThisRun,
+        });
+        throw new DuplicateVerseExhaustedError(rejectedThisRun);
+      }
+
+      const complete = textComplete;
+
+      if (!complete) {
+        plannerLog("body_incomplete", {
+          phase: "pre_save",
+          sourceFunction: BODY_SOURCE_FUNCTION,
+          reasons: incompleteReasons,
+          finishReason: generationDiagnostics.finishReason,
+        });
+      }
+
+      return finalizePlanned(
+        {
+          ...planned,
+          textComplete: complete,
+          generationReviewMessage: complete
+            ? undefined
+            : TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
+          generationDiagnostics,
+        },
+        {
+          strategy: "two_step",
+          textComplete: complete,
+          finishReason: generationDiagnostics.finishReason,
+          maxOutputTokens: generationDiagnostics.maxOutputTokens,
+          retryOccurred: generationDiagnostics.retryOccurred,
+          duplicateVerseAttempts: dupAttempt,
+          rejectedReferences: rejectedThisRun,
+        }
+      );
+    } catch (error) {
+      if (error instanceof DuplicateVerseExhaustedError) {
+        throw error;
+      }
+
+      logGeminiError(error, "planAndGenerateNextDay");
+      logRawGeminiResponse(
+        "planAndGenerateNextDay/final-failure",
+        null,
+        error instanceof Error ? error.message : String(error)
+      );
+
+      plannerLog("failure", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      if (isGeminiResponseError(error)) {
+        throw error;
+      }
+
+      const details = toGeminiErrorDetails(error);
+      throw new Error(details.message, { cause: error });
     }
-
-    logGeminiError(error, "planAndGenerateNextDay");
-    logRawGeminiResponse(
-      "planAndGenerateNextDay/final-failure",
-      null,
-      error instanceof Error ? error.message : String(error)
-    );
-
-    plannerLog("failure", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-
-    if (isGeminiResponseError(error)) {
-      throw error;
-    }
-
-    const details = toGeminiErrorDetails(error);
-    throw new Error(details.message, { cause: error });
   }
+
+  throw new DuplicateVerseExhaustedError(rejectedThisRun);
 }

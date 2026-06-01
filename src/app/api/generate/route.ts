@@ -3,6 +3,7 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
 import { logGeminiKeyStatus } from "@/lib/gemini-fetch";
 import { toGeminiErrorDetails } from "@/lib/gemini-errors";
+import { isDuplicateVerseExhaustedError } from "@/lib/duplicate-verse-retry";
 import {
   generateNextDevotional,
   GenerationBlockedError,
@@ -41,6 +42,18 @@ export async function POST() {
   } catch (err) {
     const storage = storageErrorResponse(err);
     if (storage) return storage;
+
+    if (isDuplicateVerseExhaustedError(err)) {
+      return NextResponse.json(
+        {
+          error: err.message,
+          code: "DUPLICATE_VERSE",
+          hint: "A modell háromszor is ismételt igehelyet választott. Próbáld újra a generálást.",
+          rejectedReferences: err.rejectedReferences,
+        },
+        { status: 409 }
+      );
+    }
 
     if (err instanceof GenerationBlockedError) {
       return NextResponse.json(

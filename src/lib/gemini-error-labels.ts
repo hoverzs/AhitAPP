@@ -4,6 +4,8 @@ export type GeminiErrorCode =
   | "NETWORK"
   | "API_KEY"
   | "API_HTTP"
+  | "GEMINI_OVERLOAD"
+  | "DUPLICATE_VERSE"
   | "SAFETY"
   | "EMPTY_RESPONSE"
   | "MAX_TOKENS"
@@ -11,6 +13,10 @@ export type GeminiErrorCode =
 
 export function getGeminiErrorTitle(code: GeminiErrorCode | string | undefined): string {
   switch (code) {
+    case "GEMINI_OVERLOAD":
+      return "Gemini átmenetileg túlterhelt";
+    case "DUPLICATE_VERSE":
+      return "Ismétlődő igehely";
     case "NETWORK":
     case "TLS_CERTIFICATE":
     case "API_KEY":

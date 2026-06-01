@@ -2,6 +2,7 @@ import { appendDevotional, readDevotionals, upsertDevotional } from "./devotiona
 import { buildDevotionalMemory } from "./devotional-memory";
 import { extractPrayerAndReflection } from "./devotional-fields";
 import { appendVersionSnapshot } from "./devotional-versions";
+import { assertVerseReferenceAllowed } from "./duplicate-verse-retry";
 import { GEMINI_PLANNER_MODEL } from "./config";
 import {
   defaultGeneratedStatus,
@@ -68,7 +69,11 @@ async function runGeminiForTarget(
     nextDayNumber: target.dayNumber,
   });
 
-  return planAndGenerateNextDay(memory);
+  const planned = await planAndGenerateNextDay(memory);
+
+  assertVerseReferenceAllowed(planned.verse, memory, "pre-save");
+
+  return planned;
 }
 
 async function buildDevotionalFromPlan(

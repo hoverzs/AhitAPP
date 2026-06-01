@@ -7,6 +7,14 @@ import {
   getGeminiApiHeaders,
   logGeminiError,
 } from "./gemini-client";
+import {
+  GEMINI_OVERLOAD_MAX_ATTEMPTS,
+  GEMINI_OVERLOAD_RETRY_DELAYS_MS,
+  getGeminiOverloadExhaustedMessage,
+  isGeminiOverloadError,
+  logGeminiOverloadRetry,
+  sleepMs,
+} from "./gemini-overload-retry";
 import { GEMINI_RELAXED_SAFETY_SETTINGS } from "./gemini-safety";
 import {
   extractGeminiCandidateText,
@@ -309,8 +317,56 @@ export async function geminiGenerateContentRestDetailed(params: {
   maxAttempts?: number;
 }): Promise<ExtractedGeminiText> {
   const context = params.logContext ?? "geminiGenerateContentRest";
-  const maxAttempts = params.maxAttempts ?? 2;
   logGeminiKeyStatus(context);
+
+  let lastError: unknown;
+
+  for (
+    let overloadAttempt = 1;
+    overloadAttempt <= GEMINI_OVERLOAD_MAX_ATTEMPTS;
+    overloadAttempt++
+  ) {
+    try {
+      return await geminiGenerateContentRestDetailedInner(params);
+    } catch (error) {
+      lastError = error;
+
+      if (isGeminiResponseError(error)) {
+        throw error;
+      }
+
+      const overload = isGeminiOverloadError(error);
+      const canRetryOverload =
+        overload && overloadAttempt < GEMINI_OVERLOAD_MAX_ATTEMPTS;
+
+      if (canRetryOverload) {
+        const delayMs = GEMINI_OVERLOAD_RETRY_DELAYS_MS[overloadAttempt - 1];
+        logGeminiOverloadRetry(context, overloadAttempt - 1, delayMs, error);
+        await sleepMs(delayMs);
+        continue;
+      }
+
+      if (overload) {
+        throw new Error(getGeminiOverloadExhaustedMessage(), { cause: error });
+      }
+
+      throw new Error(formatGeminiErrorMessage(error), { cause: error });
+    }
+  }
+
+  throw new Error(getGeminiOverloadExhaustedMessage(), { cause: lastError });
+}
+
+async function geminiGenerateContentRestDetailedInner(params: {
+  model: string;
+  systemInstruction: string;
+  userPrompt: string;
+  generationConfig?: GeminiGenerationConfig;
+  logContext?: string;
+  maxAttempts?: number;
+}): Promise<ExtractedGeminiText> {
+  const context = params.logContext ?? "geminiGenerateContentRest";
+  const maxAttempts = params.maxAttempts ?? 2;
 
   let lastError: unknown;
 

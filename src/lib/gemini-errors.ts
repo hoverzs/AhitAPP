@@ -1,5 +1,10 @@
 import { formatGeminiErrorMessage } from "./gemini-client";
 import type { GeminiErrorCode } from "./gemini-error-labels";
+import { isDuplicateVerseExhaustedError } from "./duplicate-verse-retry";
+import {
+  getGeminiOverloadExhaustedMessage,
+  isGeminiOverloadError,
+} from "./gemini-overload-retry";
 import {
   GeminiResponseError,
   isGeminiResponseError,
@@ -42,6 +47,14 @@ function mapResponseIssueToCode(
 function detectErrorCode(error: unknown, message: string): GeminiErrorCode {
   if (isGeminiResponseError(error)) {
     return mapResponseIssueToCode(error.issue);
+  }
+
+  if (isDuplicateVerseExhaustedError(error)) {
+    return "DUPLICATE_VERSE";
+  }
+
+  if (isGeminiOverloadError(error)) {
+    return "GEMINI_OVERLOAD";
   }
 
   const lower = message.toLowerCase();
@@ -113,6 +126,10 @@ function buildHint(code: GeminiErrorCode): string | undefined {
       return "A böngésző vagy a szerver nem érte el a Gemini API-t. Ellenőrizd az internetet, VPN-t és hogy a dev szerver fut-e.";
     case "API_KEY":
       return "Állítsd be a GEMINI_API_KEY értéket a .env.local fájlban, majd indítsd újra a dev szervert.";
+    case "GEMINI_OVERLOAD":
+      return "A Gemini szervere átmenetileg túlterhelt. A rendszer automatikusan újrapróbálta (3–8–15 mp várakozással). Várj 1–2 percet, majd indítsd újra a generálást.";
+    case "DUPLICATE_VERSE":
+      return "A rendszer automatikusan újrapróbálta másik igehellyel (legfeljebb 3×). Indítsd újra a generálást.";
     case "API_HTTP":
       return "A Google API HTTP hibát adott — ellenőrizd a kulcs jogosultságait és a modell nevét.";
     case "SAFETY":
@@ -132,6 +149,31 @@ function buildHint(code: GeminiErrorCode): string | undefined {
 }
 
 export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
+  if (isDuplicateVerseExhaustedError(error)) {
+    return {
+      message: error.message,
+      code: "DUPLICATE_VERSE",
+      hint: buildHint("DUPLICATE_VERSE"),
+      tlsMode: getGeminiTlsMode(),
+      isDevelopment: isNodeDevelopment(),
+    };
+  }
+
+  if (isGeminiOverloadError(error)) {
+    const exhausted =
+      error instanceof Error &&
+      error.message === getGeminiOverloadExhaustedMessage();
+    return {
+      message: exhausted
+        ? getGeminiOverloadExhaustedMessage()
+        : formatGeminiErrorMessage(error),
+      code: "GEMINI_OVERLOAD",
+      hint: buildHint("GEMINI_OVERLOAD"),
+      tlsMode: getGeminiTlsMode(),
+      isDevelopment: isNodeDevelopment(),
+    };
+  }
+
   const message = formatGeminiErrorMessage(error);
   const code = detectErrorCode(error, message);
 
