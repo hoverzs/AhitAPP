@@ -38,20 +38,10 @@ export function isSameMonth(a: Date, year: number, month: number): boolean {
   return a.getFullYear() === year && a.getMonth() === month;
 }
 
-/** @deprecated Használd getSuggestedCalendarViewDate (devotional-calendar.ts). */
-export function getSuggestedViewDate(
-  devotionals: { dayNumber: number; createdAt: string; date?: string }[]
-): Date {
-  if (devotionals.length === 0) return new Date();
+import { getDefaultCalendarViewMonth } from "./devotional-calendar";
 
-  const sorted = [...devotionals].sort((a, b) => {
-    const da = a.date ?? a.createdAt.slice(0, 10);
-    const db = b.date ?? b.createdAt.slice(0, 10);
-    return db.localeCompare(da);
-  });
-  const key = sorted[0].date ?? sorted[0].createdAt.slice(0, 10);
-  const parsed = new Date(`${key}T12:00:00`);
-  if (!Number.isNaN(parsed.getTime())) return parsed;
-
-  return new Date();
+/** @deprecated Használd getDefaultCalendarViewMonth (devotional-calendar / app-date). */
+export function getSuggestedViewDate(): Date {
+  const { year, monthIndex } = getDefaultCalendarViewMonth();
+  return new Date(year, monthIndex, 1);
 }

@@ -1,17 +1,23 @@
 import { devotionalDateKey } from "./storage/devotional-validate";
-import { getBudapestDateIso } from "./timezone";
+import {
+  addCalendarMonths,
+  formatCalendarDateIso,
+  getAppTodayIso,
+  getAppTodayParts,
+  getDefaultCalendarViewMonth,
+  isSameCalendarDay,
+  logAppDateDebug,
+  type CalendarViewMonth,
+} from "./app-date";
 import type { Devotional } from "./types";
 
-/** Naptár cella → YYYY-MM-DD (hónap 0-indexelt). */
-export function formatCalendarDateIso(
-  year: number,
-  month: number,
-  day: number
-): string {
-  const m = String(month + 1).padStart(2, "0");
-  const d = String(day).padStart(2, "0");
-  return `${year}-${m}-${d}`;
-}
+export type { CalendarViewMonth };
+
+export {
+  formatCalendarDateIso,
+  getDefaultCalendarViewMonth,
+  addCalendarMonths,
+};
 
 /** Published áhítatok dátum szerint (YYYY-MM-DD → rekord). */
 export function buildPublishedDevotionalDateMap(
@@ -36,11 +42,11 @@ export function hasDevotional(
 
 export function getDevotionalByCalendarDate(
   year: number,
-  month: number,
+  monthIndex: number,
   day: number,
   byDate: Map<string, Devotional>
 ): Devotional | undefined {
-  return byDate.get(formatCalendarDateIso(year, month, day));
+  return byDate.get(formatCalendarDateIso(year, monthIndex, day));
 }
 
 /** Publikus áhítat URL — dátum alapú route. */
@@ -52,29 +58,38 @@ export function getDevotionalHref(dateIso: string): string {
   return `/devotional/${dateIso}`;
 }
 
+/** Mai nap YYYY-MM-DD — Europe/Bucharest. */
 export function getTodayDateIso(): string {
-  return getBudapestDateIso();
+  return getAppTodayIso();
 }
 
 export function isCalendarToday(
   year: number,
-  month: number,
+  monthIndex: number,
   day: number,
   todayIso = getTodayDateIso()
 ): boolean {
-  return formatCalendarDateIso(year, month, day) === todayIso;
+  return isSameCalendarDay(year, monthIndex, day, todayIso);
 }
 
-/** Naptár kezdő hónap — legutóbbi közzétett áhítat dátuma, vagy ma. */
-export function getSuggestedCalendarViewDate(
-  devotionals: Devotional[]
-): Date {
-  if (devotionals.length === 0) return new Date();
+/**
+ * @deprecated Használd getDefaultCalendarViewMonth() — nem Date-et ad vissza.
+ */
+export function getSuggestedCalendarViewDate(): Date {
+  const { year, monthIndex } = getDefaultCalendarViewMonth();
+  return new Date(year, monthIndex, 1);
+}
 
-  const sorted = [...devotionals].sort((a, b) =>
-    devotionalDateKey(b).localeCompare(devotionalDateKey(a))
-  );
-  const latestKey = devotionalDateKey(sorted[0]);
-  const parsed = new Date(`${latestKey}T12:00:00`);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+/** Kliens naptár init + debug. */
+export function initCalendarDateContext(
+  component: string,
+  viewMonth: CalendarViewMonth
+): CalendarViewMonth {
+  const today = getAppTodayParts();
+  logAppDateDebug(`${component}:init`, {
+    viewYear: viewMonth.year,
+    viewMonthIndex: viewMonth.monthIndex,
+    todayIso: today.iso,
+  });
+  return viewMonth;
 }

@@ -1,15 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Devotional } from "@/lib/types";
 import { formatMonthYear } from "@/lib/calendar";
 import {
+  addCalendarMonths,
   buildPublishedDevotionalDateMap,
-  getSuggestedCalendarViewDate,
+  getDefaultCalendarViewMonth,
   getTodayDateIso,
   hasDevotional,
+  getDevotionalHref,
+  initCalendarDateContext,
+  type CalendarViewMonth,
 } from "@/lib/devotional-calendar";
+import { getAppTodayParts } from "@/lib/app-date";
 import { DevotionalCalendarMonth } from "@/components/devotional/DevotionalCalendarMonth";
 
 interface DevotionalCalendarProps {
@@ -23,28 +28,24 @@ export function DevotionalCalendar({ devotionals }: DevotionalCalendarProps) {
     [devotionals]
   );
 
-  const [viewDate, setViewDate] = useState(() =>
-    getSuggestedCalendarViewDate(devotionals)
+  const [viewMonth, setViewMonth] = useState<CalendarViewMonth>(() =>
+    initCalendarDateContext("DevotionalCalendar", getDefaultCalendarViewMonth())
   );
 
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
+  const { year, monthIndex: month } = viewMonth;
   const publishedCount = devotionals.length;
 
-  function goToPrevMonth() {
-    setViewDate(new Date(year, month - 1, 1));
-  }
-
-  function goToNextMonth() {
-    setViewDate(new Date(year, month + 1, 1));
-  }
+  useEffect(() => {
+    initCalendarDateContext("DevotionalCalendar:mount", viewMonth);
+  }, [viewMonth]);
 
   function goToToday() {
+    const today = getAppTodayParts();
     const todayIso = getTodayDateIso();
-    setViewDate(new Date(`${todayIso}T12:00:00`));
+    setViewMonth({ year: today.year, monthIndex: today.monthIndex });
 
     if (hasDevotional(todayIso, byDate)) {
-      router.push(`/devotional/${todayIso}`);
+      router.push(getDevotionalHref(todayIso));
     }
   }
 
@@ -63,7 +64,7 @@ export function DevotionalCalendar({ devotionals }: DevotionalCalendarProps) {
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <button
             type="button"
-            onClick={goToPrevMonth}
+            onClick={() => setViewMonth((v) => addCalendarMonths(v, -1))}
             className="h-10 w-10 rounded-full border border-parchment-200 bg-white text-slate-600 hover:border-gold-400/50 hover:text-gold-600 transition-colors cursor-pointer"
             aria-label="Előző hónap"
           >
@@ -78,7 +79,7 @@ export function DevotionalCalendar({ devotionals }: DevotionalCalendarProps) {
           </button>
           <button
             type="button"
-            onClick={goToNextMonth}
+            onClick={() => setViewMonth((v) => addCalendarMonths(v, 1))}
             className="h-10 w-10 rounded-full border border-parchment-200 bg-white text-slate-600 hover:border-gold-400/50 hover:text-gold-600 transition-colors cursor-pointer"
             aria-label="Következő hónap"
           >

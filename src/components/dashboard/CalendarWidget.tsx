@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Devotional } from "@/lib/types";
 import {
@@ -10,14 +10,18 @@ import {
   formatMonthYear,
 } from "@/lib/calendar";
 import {
+  addCalendarMonths,
   buildPublishedDevotionalDateMap,
   formatCalendarDateIso,
+  getDefaultCalendarViewMonth,
   getDevotionalHref,
-  getSuggestedCalendarViewDate,
   getTodayDateIso,
   hasDevotional,
+  initCalendarDateContext,
   isCalendarToday,
+  type CalendarViewMonth,
 } from "@/lib/devotional-calendar";
+import { getAppTodayParts } from "@/lib/app-date";
 import { SidebarPanel } from "@/components/home/SidebarPanel";
 import { IconCalendar } from "@/components/icons";
 
@@ -36,16 +40,21 @@ export function CalendarWidget({ devotionals }: CalendarWidgetProps) {
     [devotionals]
   );
 
-  const [viewDate, setViewDate] = useState(() =>
-    getSuggestedCalendarViewDate(devotionals)
+  const [viewMonth, setViewMonth] = useState<CalendarViewMonth>(() =>
+    initCalendarDateContext("CalendarWidget", getDefaultCalendarViewMonth())
   );
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
+
+  const { year, monthIndex: month } = viewMonth;
   const cells = buildMonthGrid(year, month);
   const todayIso = getTodayDateIso();
 
+  useEffect(() => {
+    initCalendarDateContext("CalendarWidget:mount", viewMonth);
+  }, [viewMonth]);
+
   function goToToday() {
-    setViewDate(new Date(`${todayIso}T12:00:00`));
+    const today = getAppTodayParts();
+    setViewMonth({ year: today.year, monthIndex: today.monthIndex });
 
     if (hasDevotional(todayIso, byDate)) {
       router.push(getDevotionalHref(todayIso));
@@ -67,7 +76,7 @@ export function CalendarWidget({ devotionals }: CalendarWidgetProps) {
         <div className="flex gap-1.5 relative z-20">
           <button
             type="button"
-            onClick={() => setViewDate(new Date(year, month - 1, 1))}
+            onClick={() => setViewMonth((v) => addCalendarMonths(v, -1))}
             className="h-9 w-9 rounded-xl border border-ivory-200 text-ink-muted hover:text-gold-600 hover:border-gold-500/30 hover:bg-amber-50/50 text-sm transition-all duration-300 cursor-pointer"
             aria-label="Előző hónap"
           >
@@ -75,7 +84,7 @@ export function CalendarWidget({ devotionals }: CalendarWidgetProps) {
           </button>
           <button
             type="button"
-            onClick={() => setViewDate(new Date(year, month + 1, 1))}
+            onClick={() => setViewMonth((v) => addCalendarMonths(v, 1))}
             className="h-9 w-9 rounded-xl border border-ivory-200 text-ink-muted hover:text-gold-600 hover:border-gold-500/30 hover:bg-amber-50/50 text-sm transition-all duration-300 cursor-pointer"
             aria-label="Következő hónap"
           >

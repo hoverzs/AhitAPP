@@ -1,4 +1,4 @@
-import { getBudapestDateIso } from "../timezone";
+import { addDaysToIsoDate, getAppTodayIso } from "../app-date";
 
 const DEFAULT_RETENTION_DAYS = 90;
 
@@ -12,20 +12,19 @@ export function getRetentionDays(): number {
   return parsed;
 }
 
+/** @deprecated Használd parseIsoDateParts (app-date). */
 export function parseDateIso(date: string): Date {
   const [y, m, d] = date.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
+  return new Date(y, m - 1, d);
 }
 
 export function addDaysToDateIso(date: string, days: number): string {
-  const dt = parseDateIso(date);
-  dt.setUTCDate(dt.getUTCDate() + days);
-  return dt.toISOString().slice(0, 10);
+  return addDaysToIsoDate(date, days);
 }
 
 /** Legkorábbi megőrzött dátum (YYYY-MM-DD), vagy null ha nincs limit. */
 export function getRetentionCutoffDate(
-  referenceDate: string = getBudapestDateIso()
+  referenceDate: string = getAppTodayIso()
 ): string | null {
   const days = getRetentionDays();
   if (days <= 0) return null;
@@ -34,7 +33,7 @@ export function getRetentionCutoffDate(
 
 export function isDateWithinRetention(
   date: string,
-  referenceDate: string = getBudapestDateIso()
+  referenceDate: string = getAppTodayIso()
 ): boolean {
   const cutoff = getRetentionCutoffDate(referenceDate);
   if (!cutoff) return true;

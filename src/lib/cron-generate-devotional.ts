@@ -10,7 +10,7 @@ import {
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import { getDevotionalByDate, getTodayDateIso } from "./generation-target";
 import { isPexelsConfigured } from "./pexels";
-import { getBudapestDateIso } from "./timezone";
+import { getAppTodayIso, logAppDateDebug } from "./app-date";
 
 export type CronGenerateOutcome = "created" | "skipped" | "blocked_env" | "error";
 
@@ -100,11 +100,12 @@ export async function runDailyCronGeneration(options?: {
 }): Promise<CronGenerateResult> {
   const force = options?.force === true;
   const timestamp = new Date().toISOString();
-  const date = getBudapestDateIso();
+  const date = getAppTodayIso();
 
+  logAppDateDebug("cron/generate-devotional:start", { date, force });
   cronLog("Generálás indítva", {
     date,
-    budapestToday: getTodayDateIso(),
+    appToday: getTodayDateIso(),
     force,
     vercelEnv: process.env.VERCEL_ENV ?? "local",
     nodeEnv: process.env.NODE_ENV,

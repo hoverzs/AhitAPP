@@ -4,8 +4,8 @@ import {
   normalizeDevotional,
 } from "./devotional-status";
 import { DEV_REVIEW_MODE } from "./dev-review";
+import { getAppTodayIso } from "./app-date";
 import type { Devotional } from "./types";
-import { getBudapestDateIso } from "./timezone";
 
 export type GenerationAction = "create" | "update" | "skip" | "blocked";
 
@@ -18,8 +18,9 @@ export interface GenerationTarget {
   skipReason?: string;
 }
 
+/** Mai nap — re-export a kanonikus app-date modulból. */
 export function getTodayDateIso(): string {
-  return getBudapestDateIso();
+  return getAppTodayIso();
 }
 
 export function getDevotionalByDate(
