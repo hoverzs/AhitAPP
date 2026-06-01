@@ -8,7 +8,7 @@ import {
 export const DUPLICATE_VERSE_MAX_ATTEMPTS = 3;
 
 export const DUPLICATE_VERSE_EXHAUSTED_MESSAGE =
-  "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.";
+  "Több már használt igehelyet is elutasítottunk, de most nem sikerült elég gyorsan friss alapigét találni.";
 
 export class DuplicateVerseExhaustedError extends Error {
   readonly rejectedReferences: string[];
@@ -17,6 +17,7 @@ export class DuplicateVerseExhaustedError extends Error {
     super(DUPLICATE_VERSE_EXHAUSTED_MESSAGE);
     this.name = "DuplicateVerseExhaustedError";
     this.rejectedReferences = rejectedReferences;
+    console.warn("[duplicate-verse] exhausted rejected references:", rejectedReferences);
   }
 }
 
@@ -38,7 +39,8 @@ export function buildUsedVerseReferencesPromptBlock(
   return `KORÁBBAN MÁR HASZNÁLT IGEHELYEK (TILOS újra választani — se szó szerint, se ugyanaz a könyv:fejezet:vers):
 ${lines}
 
-A scripture mezőben szereplő hivatkozás legyen ettől a listától eltérő.`;
+A scripture mezőben szereplő hivatkozás legyen ettől a listától eltérő.
+Keress kevésbé kézenfekvő, de erős alapigét; ne válassz túl gyakori áhítatos slágerszakaszt.`;
 }
 
 /** Egyedi retry instrukció a legutóbb elutasított igehelyre. */
@@ -47,7 +49,7 @@ export function buildDuplicateVerseRetryPromptBlock(reference: string): string {
 
 FONTOS — DUPLIKÁTUM:
 A(z) „${reference}” igehely már szerepelt korábban ebben az áhítatsorozatban.
-Válassz MÁSIK, még nem használt bibliai igét.
+Válassz MÁSIK, még nem használt bibliai igét, lehetőleg kevésbé gyakori szakaszt.
 A passage ${reference} has already been used. Choose a different Bible passage that has not appeared before.
 Tartsd meg ugyanazt a nap számát, tematikus irányt, kategória logikát és stílust — csak az alapige legyen új.`;
 }

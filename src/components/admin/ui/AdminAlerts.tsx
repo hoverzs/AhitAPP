@@ -11,14 +11,19 @@ export function AdminErrorAlert({
   message,
   hint,
   meta,
+  variant = "error",
 }: {
   title: string;
   message: string;
   hint?: string;
   meta?: string;
+  variant?: "error" | "warning";
 }) {
   return (
-    <div className="admin-alert admin-alert-error" role="alert">
+    <div
+      className={`admin-alert admin-alert-${variant}`}
+      role={variant === "warning" ? "status" : "alert"}
+    >
       <p className="admin-alert-title">{title}</p>
       <p className="admin-alert-message">{message}</p>
       {hint && <p className="admin-alert-hint">{hint}</p>}
@@ -89,6 +94,7 @@ export function AdminGeminiError({
       title={getGeminiErrorTitle(code)}
       message={error ?? "Ismeretlen hiba."}
       hint={hint}
+      variant={code === "DUPLICATE_VERSE" ? "warning" : "error"}
       meta={
         [code, tlsMode, debugMeta].filter(Boolean).join(" · ") || undefined
       }

@@ -57,7 +57,8 @@ export async function POST(request: Request) {
         {
           error: err.message,
           code: "DUPLICATE_VERSE",
-          hint: "A modell háromszor is ismételt igehelyet választott. Próbáld újra.",
+          hint: "Ez nem API-hiba. A rendszer automatikusan újrapróbálta másik igehellyel; indítsd újra, és friss alapigét keres.",
+          severity: "warning",
           rejectedReferences: err.rejectedReferences,
         },
         { status: 409 }

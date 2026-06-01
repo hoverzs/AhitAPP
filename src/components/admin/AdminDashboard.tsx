@@ -68,6 +68,12 @@ interface PingResult {
   debug?: GeminiErrorDebugInfo;
 }
 
+const DUPLICATE_VERSE_MESSAGE =
+  "A rendszer több használt igehelyet is elutasított, de most nem talált elég gyorsan új alapigét.";
+
+const DUPLICATE_VERSE_HINT =
+  "Ez nem API-hiba. Indítsd újra a generálást, és a rendszer új igehelyet keres.";
+
 export function AdminDashboard({
   memory,
   latestDevotional: initialLatest,
@@ -222,7 +228,9 @@ export function AdminDashboard({
 
       if (!res.ok || !data.success) {
         const friendlyError =
-          data.code === "GEMINI_OVERLOAD"
+          data.code === "DUPLICATE_VERSE"
+            ? DUPLICATE_VERSE_MESSAGE
+            : data.code === "GEMINI_OVERLOAD"
             ? (data.hint ??
               "A Gemini szervere átmenetileg túlterhelt. Automatikus újrapróbák után sem sikerült — várj 1–2 percet.")
             : data.code
@@ -231,7 +239,9 @@ export function AdminDashboard({
         setError({
           error: friendlyError,
           hint:
-            data.hint ??
+            data.code === "DUPLICATE_VERSE"
+              ? (data.hint ?? DUPLICATE_VERSE_HINT)
+              : data.hint ??
             (data.code === "GEMINI_OVERLOAD"
               ? "A szerver 3× automatikusan újrapróbálta (3 s, 8 s, 15 s várakozással)."
               : data.code === "NETWORK" || data.code === "TLS_CERTIFICATE"
@@ -293,12 +303,14 @@ export function AdminDashboard({
         setError({
           error:
             data.code === "DUPLICATE_VERSE"
-              ? (data.error ??
-                "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.")
+              ? (data.error ?? DUPLICATE_VERSE_MESSAGE)
               : data.code === "GEMINI_OVERLOAD"
               ? (data.hint ?? data.error ?? "A Gemini átmenetileg túlterhelt.")
               : (data.error ?? "Generálás sikertelen."),
-          hint: data.hint,
+          hint:
+            data.code === "DUPLICATE_VERSE"
+              ? (data.hint ?? DUPLICATE_VERSE_HINT)
+              : data.hint,
           code: data.code,
           tlsMode: data.tlsMode,
           isDevelopment: data.isDevelopment,
@@ -355,12 +367,14 @@ export function AdminDashboard({
         setError({
           error:
             data.code === "DUPLICATE_VERSE"
-              ? (data.error ??
-                "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.")
+              ? (data.error ?? DUPLICATE_VERSE_MESSAGE)
               : data.code === "GEMINI_OVERLOAD"
               ? (data.hint ?? data.error ?? "A Gemini átmenetileg túlterhelt.")
               : (data.error ?? "Újragenerálás sikertelen."),
-          hint: data.hint,
+          hint:
+            data.code === "DUPLICATE_VERSE"
+              ? (data.hint ?? DUPLICATE_VERSE_HINT)
+              : data.hint,
           code: data.code,
           debug: data.debug,
         });
@@ -712,6 +726,7 @@ export function AdminDashboard({
             }
             message={error.error ?? "Ismeretlen hiba."}
             hint={error.hint}
+            variant={error.code === "DUPLICATE_VERSE" ? "warning" : "error"}
             meta={
               [error.code, error.tlsMode, formatGeminiDebugMeta(error.debug)]
                 .filter(Boolean)

@@ -943,20 +943,40 @@
     @apply border-red-200/80 bg-red-50/90;
   }
 
+  .admin-alert-warning {
+    @apply border-amber-200/80 bg-amber-50/90;
+  }
+
   .admin-alert-title {
     @apply text-sm font-semibold text-red-900;
+  }
+
+  .admin-alert-warning .admin-alert-title {
+    @apply text-amber-900;
   }
 
   .admin-alert-message {
     @apply mt-2 text-sm text-red-800 leading-relaxed;
   }
 
+  .admin-alert-warning .admin-alert-message {
+    @apply text-amber-800;
+  }
+
   .admin-alert-hint {
     @apply mt-3 text-xs text-red-700/90 leading-relaxed border-t border-red-200/50 pt-3;
   }
 
+  .admin-alert-warning .admin-alert-hint {
+    @apply text-amber-700/90 border-amber-200/50;
+  }
+
   .admin-alert-meta {
     @apply mt-2 text-[10px] uppercase tracking-wider text-red-500/80 font-medium;
+  }
+
+  .admin-alert-warning .admin-alert-meta {
+    @apply text-amber-600/80;
   }
 
   .admin-toast {

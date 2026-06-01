@@ -10,6 +10,10 @@ const BASE_MESSAGE =
 const LOADING_STAGES: { afterMs: number; text: string }[] = [
   { afterMs: 0, text: BASE_MESSAGE },
   {
+    afterMs: 7_000,
+    text: "Új igehely keresése...",
+  },
+  {
     afterMs: 12_000,
     text: "Generálás folyamatban… Ha a Gemini szervere terhelt, automatikusan újrapróbáljuk.",
   },

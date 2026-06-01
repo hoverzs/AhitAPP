@@ -6,6 +6,8 @@
 export const SCRIPTURE_SELECTION_GUIDELINES = `BIBLIAI IGE VÁLASZTÁS:
 - Olyan igét válassz, amely képszerű, emberközeli és valódi lelki mélységet hordoz — ne sablonos devóciós klisé, ne üres frázis.
 - Kerüld a túl gyakran ismételt, elcsépült igehelyek dominanciáját. Népszerű igék időnként szerepelhetnek, de ne legyenek az alap: ne ugyanazok a „minden napra” versek térjenek vissza (pl. Zsolt 23, Fil 4:13, Jer 29:11, Róm 8:28, 1 Kor 13:4–7 folyamatos ismétlése).
+- Ha van tiltott / már használt igehelylista, azt kezeld kemény kizárásként. Ne válassz azonos könyv-fejezet-vers hivatkozást, és ne válassz ugyanannak a szakasznak közeli parafrázisát sem.
+- Kifejezetten kerüld az automatikus „top 20” áhítatos alapigéket, ha frissebb, kevésbé használt szakasz is illik a témához.
 - Törekedj kevésbé ismert, mégis erős és könnyen aktualizálható szakaszokra, amelyek mai élethelyzetekhez kapcsolódnak: belső vívódás, döntés, bizonytalanság, remény, kapcsolatok, fáradtság, csend, bűnbánat, hit próbája, Isten jelenléte a mindennapban.
 - Az ige legyen kibontandó: adj lehetőséget mély, de közérthető lelki reflexióra — ne csak rövid bíztató mondat legyen.
 - Változatosság a bibliai könyvek között is (zsoltárok, próféták, evangéliumok, levelek, bölcsesség, történeti részek), hogy a sorozat hosszú távon se legyen kiszámítható vagy monoton.`;

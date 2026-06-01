@@ -24,7 +24,7 @@ export function getUserFriendlyGeminiMessage(
       return "A Gemini API HTTP hibát adott. Ellenőrizd a kulcsot és a modell nevét.";
     case "DUPLICATE_VERSE":
       return fallback ??
-        "Nem sikerült új, még nem használt igerészt választani. Kérlek próbáld újra.";
+        "Több már használt igehelyet is elutasítottunk, de most nem sikerült elég gyorsan friss alapigét találni.";
     case "SAFETY":
       return fallback ?? "A modell biztonsági szűrője blokkolta a választ.";
     case "EMPTY_RESPONSE":

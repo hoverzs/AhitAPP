@@ -44,6 +44,7 @@ További kontextus (napok, kategóriák):
 ${memory.summaryForPrompt}
 
 Válassz új, még nem használt alapigét a fenti irányelvek és a tiltott lista szerint.
+Ne válassz túl gyakori áhítatos alapigét, ha kevésbé kézenfekvő szakasz is illik.
 Tartsd a sorozat tematikus/logikai ívét (kategória, nap száma).
 Csak a 5 mezős JSON. Ne írj áhítat szöveget.${rejectionsBlock}`;
 }

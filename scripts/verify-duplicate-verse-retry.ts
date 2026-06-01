@@ -37,7 +37,7 @@ assert(
 
 assert(DUPLICATE_VERSE_MAX_ATTEMPTS === 3, "max 3 attempts");
 assert(
-  DUPLICATE_VERSE_EXHAUSTED_MESSAGE.includes("Nem sikerült"),
+  DUPLICATE_VERSE_EXHAUSTED_MESSAGE.includes("friss alapigét"),
   "friendly exhausted message"
 );
 

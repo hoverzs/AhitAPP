@@ -199,7 +199,7 @@ function buildHint(code: GeminiErrorCode): string | undefined {
     case "GEMINI_OVERLOAD":
       return "A Gemini szervere átmenetileg túlterhelt. A rendszer automatikusan újrapróbálta (3–8–15 mp várakozással). Várj 1–2 percet, majd indítsd újra a generálást.";
     case "DUPLICATE_VERSE":
-      return "A rendszer automatikusan újrapróbálta másik igehellyel (legfeljebb 3×). Indítsd újra a generálást.";
+      return "Ez nem API-hiba. A rendszer automatikusan újrapróbálta másik igehellyel (legfeljebb 3×). Indítsd újra a generálást.";
     case "API_HTTP":
       return "A Google API HTTP hibát adott — ellenőrizd a kulcs jogosultságait és a modell nevét. A terminálban a teljes API válasz naplózva van.";
     case "SAFETY":
