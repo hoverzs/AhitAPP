@@ -1,5 +1,11 @@
 import { formatGeminiErrorMessage } from "./gemini-client";
-import type { GeminiErrorCode } from "./gemini-error-labels";
+import {
+  isGeminiApiError,
+  isGeminiDebugUiEnabled,
+  type GeminiApiError,
+  type GeminiApiFailureKind,
+} from "./gemini-api-error";
+import type { GeminiErrorCode, GeminiErrorDebugInfo } from "./gemini-error-labels";
 import { isDuplicateVerseExhaustedError } from "./duplicate-verse-retry";
 import {
   getGeminiOverloadExhaustedMessage,
@@ -10,11 +16,13 @@ import {
   isGeminiResponseError,
 } from "./gemini-response";
 import { getGeminiTlsMode, isNodeDevelopment } from "./gemini-tls";
+import { getUserFriendlyGeminiMessage } from "./gemini-user-messages";
 
-export type { GeminiErrorCode } from "./gemini-error-labels";
+export type { GeminiErrorCode, GeminiErrorDebugInfo } from "./gemini-error-labels";
 export { getGeminiErrorTitle } from "./gemini-error-labels";
 
 export interface GeminiErrorDetails {
+  /** Felhasználóbarát üzenet (UI). */
   message: string;
   code: GeminiErrorCode;
   hint?: string;
@@ -22,6 +30,30 @@ export interface GeminiErrorDetails {
   isDevelopment: boolean;
   finishReason?: string;
   diagnostics?: string;
+  /** Csak dev + GEMINI_DEBUG_UI — technikai részletek. */
+  debug?: GeminiErrorDebugInfo;
+}
+
+function mapApiKindToCode(kind: GeminiApiFailureKind): GeminiErrorCode {
+  switch (kind) {
+    case "AUTH":
+      return "AUTH";
+    case "QUOTA":
+      return "QUOTA";
+    case "OVERLOAD":
+      return "GEMINI_OVERLOAD";
+    case "NETWORK":
+      return "NETWORK";
+    case "TIMEOUT":
+      return "TIMEOUT";
+    case "TLS":
+      return "TLS_CERTIFICATE";
+    case "HTTP":
+    case "JSON_BODY":
+      return "API_HTTP";
+    default:
+      return "UNKNOWN";
+  }
 }
 
 function mapResponseIssueToCode(
@@ -44,7 +76,26 @@ function mapResponseIssueToCode(
   }
 }
 
+function buildDebugFromApiError(error: GeminiApiError): GeminiErrorDebugInfo {
+  return {
+    httpStatus: error.httpStatus,
+    geminiMessage: error.geminiMessage,
+    geminiStatus: error.geminiStatus,
+    model: error.model,
+    durationMs: error.durationMs,
+    attempt: error.attempt,
+    overloadRetry: error.overloadRetry,
+    technicalMessage: error.message,
+    rawBodyPreview: error.rawBody?.slice(0, 2000),
+    kind: error.kind,
+  };
+}
+
 function detectErrorCode(error: unknown, message: string): GeminiErrorCode {
+  if (isGeminiApiError(error)) {
+    return mapApiKindToCode(error.kind);
+  }
+
   if (isGeminiResponseError(error)) {
     return mapResponseIssueToCode(error.issue);
   }
@@ -71,10 +122,23 @@ function detectErrorCode(error: unknown, message: string): GeminiErrorCode {
   ) {
     return "API_KEY";
   }
+  if (/\b401\b/.test(combined) || /\b403\b/.test(combined)) {
+    return "AUTH";
+  }
+  if (/\b429\b/.test(combined) || combined.includes("quota")) {
+    return "QUOTA";
+  }
+  if (
+    combined.includes("aborted") ||
+    combined.includes("timeout") ||
+    combined.includes("timed out")
+  ) {
+    return "TIMEOUT";
+  }
   if (
     combined.includes("finishreason: safety") ||
     combined.includes("biztonsági szűrő") ||
-    combined.includes("blokkolva") && combined.includes("prompt")
+    (combined.includes("blokkolva") && combined.includes("prompt"))
   ) {
     return "SAFETY";
   }
@@ -117,6 +181,12 @@ function detectErrorCode(error: unknown, message: string): GeminiErrorCode {
 
 function buildHint(code: GeminiErrorCode): string | undefined {
   switch (code) {
+    case "AUTH":
+      return "Ellenőrizd a GEMINI_API_KEY / GOOGLE_API_KEY értékét a .env.local-ban és a Google AI Studio jogosultságait.";
+    case "QUOTA":
+      return "429 — kvóta vagy rate limit. Várj, vagy növeld a limitet a Google Cloud / AI Studio konzolon.";
+    case "TIMEOUT":
+      return "A kérés túl sokáig tartott. Próbáld újra; ha ismétlődik, csökkentsd a prompt méretét.";
     case "TLS_CERTIFICATE":
       if (isNodeDevelopment()) {
         return "Helyi fejlesztés: a Gemini kliens automatikusan engedékeny TLS-t használ. Indítsd újra a dev szervert (npm run dev:clean), ha most állítottad be a .env.local-t.";
@@ -131,7 +201,7 @@ function buildHint(code: GeminiErrorCode): string | undefined {
     case "DUPLICATE_VERSE":
       return "A rendszer automatikusan újrapróbálta másik igehellyel (legfeljebb 3×). Indítsd újra a generálást.";
     case "API_HTTP":
-      return "A Google API HTTP hibát adott — ellenőrizd a kulcs jogosultságait és a modell nevét.";
+      return "A Google API HTTP hibát adott — ellenőrizd a kulcs jogosultságait és a modell nevét. A terminálban a teljes API válasz naplózva van.";
     case "SAFETY":
       return "A modell biztonsági szűrője blokkolta a választ. Próbáld enyhébb megfogalmazással, vagy nézd a terminálban a safetyRatings mezőt.";
     case "EMPTY_RESPONSE":
@@ -140,7 +210,7 @@ function buildHint(code: GeminiErrorCode): string | undefined {
       return "A kapcsolat működik, de a válasz túl hosszú lett vagy levágódott. A rendszer automatikusan újrapróbál rövidebb instrukcióval; ha ismétlődik, csökkentsd a kért tartalom hosszát (tömör, max. 1200–1800 szó).";
     case "UNKNOWN":
       if (isNodeDevelopment()) {
-        return "Nézd a terminálban a „Raw Gemini Response” naplót (finishReason, usageMetadata).";
+        return "Nézd a terminálban a [gemini-api] FAILURE naplót (HTTP státusz, teljes válasz test).";
       }
       return undefined;
     default:
@@ -151,7 +221,7 @@ function buildHint(code: GeminiErrorCode): string | undefined {
 export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
   if (isDuplicateVerseExhaustedError(error)) {
     return {
-      message: error.message,
+      message: getUserFriendlyGeminiMessage("DUPLICATE_VERSE", error.message),
       code: "DUPLICATE_VERSE",
       hint: buildHint("DUPLICATE_VERSE"),
       tlsMode: getGeminiTlsMode(),
@@ -163,21 +233,32 @@ export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
     const exhausted =
       error instanceof Error &&
       error.message === getGeminiOverloadExhaustedMessage();
+    const code: GeminiErrorCode = "GEMINI_OVERLOAD";
+    const apiCause = error instanceof Error ? error.cause : undefined;
+
     return {
       message: exhausted
-        ? getGeminiOverloadExhaustedMessage()
-        : formatGeminiErrorMessage(error),
-      code: "GEMINI_OVERLOAD",
-      hint: buildHint("GEMINI_OVERLOAD"),
+        ? getUserFriendlyGeminiMessage(code)
+        : getUserFriendlyGeminiMessage(code, formatGeminiErrorMessage(error)),
+      code,
+      hint: buildHint(code),
       tlsMode: getGeminiTlsMode(),
       isDevelopment: isNodeDevelopment(),
+      debug:
+        isGeminiDebugUiEnabled() && isGeminiApiError(apiCause)
+          ? buildDebugFromApiError(apiCause)
+          : undefined,
     };
   }
 
-  const message = formatGeminiErrorMessage(error);
-  const code = detectErrorCode(error, message);
+  const technicalMessage = formatGeminiErrorMessage(error);
+  const code = detectErrorCode(error, technicalMessage);
+  const message = getUserFriendlyGeminiMessage(
+    code,
+    isGeminiResponseError(error) ? technicalMessage : undefined
+  );
 
-  return {
+  const base: GeminiErrorDetails = {
     message,
     code,
     hint: buildHint(code),
@@ -185,5 +266,33 @@ export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
     isDevelopment: isNodeDevelopment(),
     finishReason: isGeminiResponseError(error) ? error.finishReason : undefined,
     diagnostics: isGeminiResponseError(error) ? error.diagnostics : undefined,
+  };
+
+  if (isGeminiDebugUiEnabled() && isGeminiApiError(error)) {
+    base.debug = buildDebugFromApiError(error);
+  } else if (
+    isGeminiDebugUiEnabled() &&
+    error instanceof Error &&
+    isGeminiApiError(error.cause)
+  ) {
+    base.debug = buildDebugFromApiError(error.cause);
+  }
+
+  return base;
+}
+
+/** API JSON válasz — felhasználóbarát error + opcionális debug. */
+export function buildGeminiErrorApiPayload(
+  details: GeminiErrorDetails
+): Record<string, unknown> {
+  return {
+    error: details.message,
+    code: details.code,
+    hint: details.hint,
+    tlsMode: details.tlsMode,
+    isDevelopment: details.isDevelopment,
+    finishReason: details.finishReason,
+    diagnostics: details.diagnostics,
+    ...(details.debug ? { debug: details.debug } : {}),
   };
 }

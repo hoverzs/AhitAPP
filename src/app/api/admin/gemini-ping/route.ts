@@ -3,7 +3,10 @@ import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
 import { logGeminiKeyStatus, pingGeminiApi } from "@/lib/gemini-fetch";
 import { getGeminiTlsMode } from "@/lib/gemini-tls";
-import { toGeminiErrorDetails } from "@/lib/gemini-errors";
+import {
+  buildGeminiErrorApiPayload,
+  toGeminiErrorDetails,
+} from "@/lib/gemini-errors";
 
 export const dynamic = "force-dynamic";
 
@@ -34,14 +37,8 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: false,
-        tlsMode: details.tlsMode,
-        isDevelopment: details.isDevelopment,
         keyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
-        error: details.message,
-        code: details.code,
-        hint: details.hint,
-        finishReason: details.finishReason,
-        diagnostics: details.diagnostics,
+        ...buildGeminiErrorApiPayload(details),
       },
       { status: 502 }
     );

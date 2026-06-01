@@ -1,6 +1,10 @@
 import { AdminButton } from "./AdminButton";
 import { AdminPanel } from "./AdminPanel";
-import { getGeminiErrorTitle } from "@/lib/gemini-error-labels";
+import {
+  getGeminiErrorTitle,
+  type GeminiErrorDebugInfo,
+} from "@/lib/gemini-error-labels";
+import { formatGeminiDebugMeta } from "@/lib/gemini-debug-display";
 
 export function AdminErrorAlert({
   title,
@@ -71,18 +75,23 @@ export function AdminGeminiError({
   error,
   hint,
   tlsMode,
+  debug,
 }: {
   code?: string;
   error?: string;
   hint?: string;
   tlsMode?: string;
+  debug?: GeminiErrorDebugInfo;
 }) {
+  const debugMeta = formatGeminiDebugMeta(debug);
   return (
     <AdminErrorAlert
       title={getGeminiErrorTitle(code)}
       message={error ?? "Ismeretlen hiba."}
       hint={hint}
-      meta={[code, tlsMode].filter(Boolean).join(" · ")}
+      meta={
+        [code, tlsMode, debugMeta].filter(Boolean).join(" · ") || undefined
+      }
     />
   );
 }

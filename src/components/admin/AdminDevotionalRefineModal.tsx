@@ -5,6 +5,8 @@ import { DevotionalContent } from "@/components/devotional/DevotionalContent";
 import { AdminButton } from "@/components/admin/ui/AdminButton";
 import { AdminPanel } from "@/components/admin/ui/AdminPanel";
 import { AdminErrorAlert } from "@/components/admin/ui/AdminAlerts";
+import type { GeminiErrorDebugInfo } from "@/lib/gemini-error-labels";
+import { formatGeminiDebugMeta } from "@/lib/gemini-debug-display";
 import { IconSpinner } from "@/components/icons";
 import { REFINE_INSTRUCTION_SUGGESTIONS } from "@/lib/prompts/devotional-refine-prompt";
 import type {
@@ -25,6 +27,7 @@ interface ApiErrorPayload {
   error?: string;
   hint?: string;
   code?: string;
+  debug?: GeminiErrorDebugInfo;
 }
 
 export function AdminDevotionalRefineModal({
@@ -80,6 +83,7 @@ export function AdminDevotionalRefineModal({
           error: data.error ?? "Finomítás sikertelen.",
           hint: data.hint,
           code: data.code,
+          debug: data.debug,
         });
         return;
       }
@@ -154,7 +158,11 @@ export function AdminDevotionalRefineModal({
               title="Hiba"
               message={error.error ?? "Ismeretlen hiba."}
               hint={error.hint}
-              meta={error.code}
+              meta={
+                [error.code, formatGeminiDebugMeta(error.debug)]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
             />
           </div>
         )}

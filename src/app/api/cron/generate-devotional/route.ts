@@ -41,6 +41,8 @@ async function handleCron(request: NextRequest) {
         success: false,
         error: result.error,
         code: result.code,
+        hint: "hint" in result ? result.hint : undefined,
+        debug: "debug" in result ? result.debug : undefined,
         date: result.date,
         message: result.message,
         timestamp: result.timestamp,

@@ -31,7 +31,11 @@ import type { DevotionalMemory } from "@/lib/devotional-memory";
 import { statusLabelHu } from "@/lib/devotional-status";
 import { CopyButton } from "@/components/CopyButton";
 import { formatDevotionalForFacebook, getPublicDevotionalUrl } from "@/lib/facebook";
-import { getGeminiErrorTitle } from "@/lib/gemini-error-labels";
+import {
+  getGeminiErrorTitle,
+  type GeminiErrorDebugInfo,
+} from "@/lib/gemini-error-labels";
+import { formatGeminiDebugMeta } from "@/lib/gemini-debug-display";
 import { useGeminiLoadingMessage } from "@/hooks/useGeminiLoadingMessage";
 
 interface AdminDashboardProps {
@@ -50,6 +54,7 @@ interface ApiErrorPayload {
   code?: string;
   tlsMode?: string;
   isDevelopment?: boolean;
+  debug?: GeminiErrorDebugInfo;
 }
 
 interface PingResult {
@@ -60,6 +65,7 @@ interface PingResult {
   error?: string;
   hint?: string;
   code?: string;
+  debug?: GeminiErrorDebugInfo;
 }
 
 export function AdminDashboard({
@@ -230,12 +236,15 @@ export function AdminDashboard({
               ? "A szerver 3× automatikusan újrapróbálta (3 s, 8 s, 15 s várakozással)."
               : data.code === "NETWORK" || data.code === "TLS_CERTIFICATE"
                 ? "Ellenőrizd a hálózati kapcsolatot, majd próbáld újra."
-                : data.code === "API_KEY"
+                : data.code === "API_KEY" || data.code === "AUTH"
                   ? "Ellenőrizd a GEMINI_API_KEY környezeti változót."
-                  : data.code
-                    ? "Ha a hiba tartós, nézd meg a szerver naplókat."
-                    : undefined),
+                  : data.code === "QUOTA"
+                    ? "429 kvóta — várj, vagy növeld a limitet a Google AI Studio-ban."
+                    : data.code
+                      ? "Ha a hiba tartós, nézd meg a szerver naplókat ([gemini-api])."
+                      : undefined),
           code: data.code,
+          debug: data.debug,
         });
         return;
       }
@@ -293,6 +302,7 @@ export function AdminDashboard({
           code: data.code,
           tlsMode: data.tlsMode,
           isDevelopment: data.isDevelopment,
+          debug: data.debug,
         });
         return;
       }
@@ -352,6 +362,7 @@ export function AdminDashboard({
               : (data.error ?? "Újragenerálás sikertelen."),
           hint: data.hint,
           code: data.code,
+          debug: data.debug,
         });
         return;
       }
@@ -666,7 +677,15 @@ export function AdminDashboard({
                     title={getGeminiErrorTitle(pingResult.code)}
                     message={pingResult.error ?? "Ismeretlen hiba."}
                     hint={pingResult.hint}
-                    meta={[pingResult.code, pingResult.tlsMode].filter(Boolean).join(" · ")}
+                    meta={
+                      [
+                        pingResult.code,
+                        pingResult.tlsMode,
+                        formatGeminiDebugMeta(pingResult.debug),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || undefined
+                    }
                   />
                 </div>
               )}
@@ -693,7 +712,11 @@ export function AdminDashboard({
             }
             message={error.error ?? "Ismeretlen hiba."}
             hint={error.hint}
-            meta={[error.code, error.tlsMode].filter(Boolean).join(" · ")}
+            meta={
+              [error.code, error.tlsMode, formatGeminiDebugMeta(error.debug)]
+                .filter(Boolean)
+                .join(" · ") || undefined
+            }
           />
         )}
 

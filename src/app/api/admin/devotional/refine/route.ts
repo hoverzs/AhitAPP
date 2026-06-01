@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
-import { toGeminiErrorDetails } from "@/lib/gemini-errors";
+import {
+  buildGeminiErrorApiPayload,
+  toGeminiErrorDetails,
+} from "@/lib/gemini-errors";
 import { previewDevotionalRefinement } from "@/lib/refine-devotional";
 
 export const maxDuration = 300;
@@ -45,13 +48,8 @@ export async function POST(request: Request) {
   } catch (err) {
     logGeminiError(err, "POST /api/admin/devotional/refine");
     const details = toGeminiErrorDetails(err);
-    return NextResponse.json(
-      {
-        error: details.message,
-        code: details.code,
-        hint: details.hint,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(buildGeminiErrorApiPayload(details), {
+      status: 500,
+    });
   }
 }

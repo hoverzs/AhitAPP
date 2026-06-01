@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
 import { logGeminiKeyStatus } from "@/lib/gemini-fetch";
-import { toGeminiErrorDetails } from "@/lib/gemini-errors";
+import {
+  buildGeminiErrorApiPayload,
+  toGeminiErrorDetails,
+} from "@/lib/gemini-errors";
 import { isDuplicateVerseExhaustedError } from "@/lib/duplicate-verse-retry";
 import {
   generateNextDevotional,
@@ -86,17 +89,8 @@ export async function POST() {
       /* best effort */
     }
 
-    return NextResponse.json(
-      {
-        error: details.message,
-        code: details.code,
-        hint: details.hint,
-        tlsMode: details.tlsMode,
-        isDevelopment: details.isDevelopment,
-        finishReason: details.finishReason,
-        diagnostics: details.diagnostics,
-      },
-      { status: 500 }
-    );
+    return NextResponse.json(buildGeminiErrorApiPayload(details), {
+      status: 500,
+    });
   }
 }

@@ -1,5 +1,7 @@
 import { logGeminiError } from "./gemini-client";
 import { toGeminiErrorDetails } from "./gemini-errors";
+import { isGeminiApiError } from "./gemini-api-error";
+import type { GeminiErrorDebugInfo } from "./gemini-error-labels";
 import { isCronGenerationEnabled } from "./dev-review";
 import { isProductionDeployment } from "./cron-env";
 import { readDevotionals } from "./devotionals";
@@ -31,6 +33,8 @@ export interface CronGenerateResult {
   };
   error?: string;
   code?: string;
+  hint?: string;
+  debug?: GeminiErrorDebugInfo;
 }
 
 function cronLog(message: string, meta?: Record<string, unknown>): void {
@@ -194,10 +198,18 @@ export async function runDailyCronGeneration(options?: {
 
     logGeminiError(error, "cron/generate-devotional");
     const details = toGeminiErrorDetails(error);
+    const apiErr =
+      isGeminiApiError(error) ? error : error instanceof Error && isGeminiApiError(error.cause) ? error.cause : null;
     cronError("Gemini generálás sikertelen — előző áhítat marad aktív", {
       date,
       error: details.message,
       code: details.code,
+      httpStatus: apiErr?.httpStatus,
+      geminiMessage: apiErr?.geminiMessage,
+      model: apiErr?.model,
+      durationMs: apiErr?.durationMs,
+      attempt: apiErr?.attempt,
+      overloadRetry: apiErr?.overloadRetry,
     });
 
     return {
@@ -207,6 +219,8 @@ export async function runDailyCronGeneration(options?: {
       timestamp,
       error: details.message,
       code: details.code,
+      hint: details.hint,
+      ...(details.debug ? { debug: details.debug } : {}),
     };
   }
 }

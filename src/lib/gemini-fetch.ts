@@ -3,6 +3,15 @@ import {
   GEMINI_TEXT_MODEL,
 } from "./config";
 import {
+  buildGeminiApiErrorFromHttp,
+  buildGeminiApiErrorFromNetwork,
+  isGeminiApiError,
+  logGeminiApiFailure,
+  logGeminiApiRetry,
+  logGeminiApiSuccess,
+  parseGeminiHttpErrorBody,
+} from "./gemini-api-error";
+import {
   formatGeminiErrorMessage,
   getGeminiApiHeaders,
   logGeminiError,
@@ -12,7 +21,6 @@ import {
   GEMINI_OVERLOAD_RETRY_DELAYS_MS,
   getGeminiOverloadExhaustedMessage,
   isGeminiOverloadError,
-  logGeminiOverloadRetry,
   sleepMs,
 } from "./gemini-overload-retry";
 import { GEMINI_RELAXED_SAFETY_SETTINGS } from "./gemini-safety";
@@ -230,8 +238,10 @@ async function geminiGenerateContentRestOnce(params: {
   generationConfig?: GeminiGenerationConfig;
   logContext: string;
   attempt: number;
+  overloadRetry?: number;
 }): Promise<ExtractedGeminiText> {
-  const { logContext: context, attempt } = params;
+  const { logContext: context, attempt, overloadRetry = 0 } = params;
+  const startedAt = Date.now();
   const url = `${GEMINI_API_BASE}/models/${params.model}:generateContent`;
 
   logGeminiTextRequest(
@@ -269,26 +279,80 @@ async function geminiGenerateContentRestOnce(params: {
       : "mime=default"
   );
 
-  const response = await geminiExternalFetch(url, {
-    method: "POST",
-    headers: getGeminiApiHeaders(),
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await geminiExternalFetch(url, {
+      method: "POST",
+      headers: getGeminiApiHeaders(),
+      body: JSON.stringify(body),
+    });
+  } catch (networkError) {
+    const durationMs = Date.now() - startedAt;
+    const apiErr = buildGeminiApiErrorFromNetwork(networkError, {
+      context,
+      model: params.model,
+      attempt,
+      durationMs,
+      overloadRetry,
+    });
+    logGeminiApiFailure({
+      context,
+      model: params.model,
+      durationMs,
+      attempt,
+      overloadRetry,
+      kind: apiErr.kind,
+      willRetry: false,
+      errorName: networkError instanceof Error ? networkError.name : undefined,
+      causeMessage:
+        networkError instanceof Error ? networkError.message : String(networkError),
+    });
+    logGeminiError(networkError, `${context} / network attempt ${attempt}`);
+    throw apiErr;
+  }
 
   const rawText = await response.text();
+  const durationMs = Date.now() - startedAt;
 
   if (!response.ok) {
     logRawGeminiResponse(context, null, rawText);
-    const apiError = new Error(
-      `Gemini API HTTP ${response.status}: ${rawText.slice(0, 400)}`
-    );
-    logGeminiError(apiError, `${context} / HTTP ${response.status}`);
-    throw apiError;
+    const parsed = parseGeminiHttpErrorBody(response.status, rawText);
+    const apiErr = buildGeminiApiErrorFromHttp({
+      ...parsed,
+      context,
+      model: params.model,
+      attempt,
+      durationMs,
+      overloadRetry,
+    });
+    logGeminiApiFailure({
+      context,
+      model: params.model,
+      httpStatus: response.status,
+      geminiMessage: parsed.geminiMessage,
+      geminiStatus: parsed.geminiStatus,
+      durationMs,
+      attempt,
+      overloadRetry,
+      kind: apiErr.kind,
+      willRetry: false,
+      rawBody: rawText,
+    });
+    logGeminiError(apiErr, `${context} / HTTP ${response.status}`);
+    throw apiErr;
   }
 
   const data = parseGenerateContentHttpBody(context, rawText, true);
   const extracted = extractGeminiCandidateText(data);
   logGeminiTextResponseStructure(context, data, extracted);
+  logGeminiApiSuccess({
+    context,
+    model: params.model,
+    durationMs,
+    attempt,
+    overloadRetry,
+    finishReason: extracted.finishReason,
+  });
   return extracted;
 }
 
@@ -327,11 +391,56 @@ export async function geminiGenerateContentRestDetailed(params: {
     overloadAttempt++
   ) {
     try {
-      return await geminiGenerateContentRestDetailedInner(params);
+      return await geminiGenerateContentRestDetailedInner({
+        ...params,
+        overloadRetry: overloadAttempt - 1,
+      });
     } catch (error) {
       lastError = error;
 
       if (isGeminiResponseError(error)) {
+        throw error;
+      }
+
+      if (isGeminiApiError(error)) {
+        const overload = error.kind === "OVERLOAD";
+        const canRetryOverload =
+          overload && overloadAttempt < GEMINI_OVERLOAD_MAX_ATTEMPTS;
+
+        if (canRetryOverload) {
+          const delayMs = GEMINI_OVERLOAD_RETRY_DELAYS_MS[overloadAttempt - 1];
+          logGeminiApiRetry({
+            context,
+            model: params.model,
+            kind: "overload",
+            fromAttempt: overloadAttempt,
+            toAttempt: overloadAttempt + 1,
+            delayMs,
+            reason: `HTTP ${error.httpStatus ?? "overload"} — ${error.geminiMessage ?? error.message}`,
+            previousError: error,
+          });
+          logGeminiApiFailure({
+            context,
+            model: params.model,
+            httpStatus: error.httpStatus,
+            geminiMessage: error.geminiMessage,
+            geminiStatus: error.geminiStatus,
+            durationMs: error.durationMs,
+            attempt: error.attempt,
+            overloadRetry: error.overloadRetry,
+            kind: error.kind,
+            willRetry: true,
+            retryReason: `overload retry in ${delayMs}ms`,
+            rawBody: error.rawBody,
+          });
+          await sleepMs(delayMs);
+          continue;
+        }
+
+        if (overload) {
+          throw new Error(getGeminiOverloadExhaustedMessage(), { cause: error });
+        }
+
         throw error;
       }
 
@@ -341,7 +450,16 @@ export async function geminiGenerateContentRestDetailed(params: {
 
       if (canRetryOverload) {
         const delayMs = GEMINI_OVERLOAD_RETRY_DELAYS_MS[overloadAttempt - 1];
-        logGeminiOverloadRetry(context, overloadAttempt - 1, delayMs, error);
+        logGeminiApiRetry({
+          context,
+          model: params.model,
+          kind: "overload",
+          fromAttempt: overloadAttempt,
+          toAttempt: overloadAttempt + 1,
+          delayMs,
+          reason: "overload (legacy detection)",
+          previousError: error,
+        });
         await sleepMs(delayMs);
         continue;
       }
@@ -364,6 +482,7 @@ async function geminiGenerateContentRestDetailedInner(params: {
   generationConfig?: GeminiGenerationConfig;
   logContext?: string;
   maxAttempts?: number;
+  overloadRetry?: number;
 }): Promise<ExtractedGeminiText> {
   const context = params.logContext ?? "geminiGenerateContentRest";
   const maxAttempts = params.maxAttempts ?? 2;
@@ -387,7 +506,14 @@ async function geminiGenerateContentRestDetailedInner(params: {
       if (base.responseMimeType === "application/json") {
         userPrompt = `${params.userPrompt}\n\nReturn compact JSON only. Shorter content field.`;
       }
-      console.warn(`[${context}] Retrying generateContent (attempt ${attempt}).`);
+      logGeminiApiRetry({
+        context,
+        model: params.model,
+        kind: "inner",
+        fromAttempt: attempt - 1,
+        toAttempt: attempt,
+        reason: "token/JSON/empty response retry",
+      });
     }
 
     try {
@@ -398,6 +524,7 @@ async function geminiGenerateContentRestDetailedInner(params: {
         generationConfig,
         logContext: context,
         attempt,
+        overloadRetry: params.overloadRetry,
       });
     } catch (error) {
       lastError = error;
@@ -406,7 +533,23 @@ async function geminiGenerateContentRestDetailedInner(params: {
         throw error;
       }
 
+      if (isGeminiApiError(error)) {
+        if (attempt < maxAttempts && isRetriableGeminiResponseError(error)) {
+          continue;
+        }
+        throw error;
+      }
+
       if (attempt < maxAttempts && isRetriableGeminiResponseError(error)) {
+        logGeminiApiRetry({
+          context,
+          model: params.model,
+          kind: "inner",
+          fromAttempt: attempt,
+          toAttempt: attempt + 1,
+          reason: "retriable response error",
+          previousError: error,
+        });
         logGeminiError(error, `${context} / attempt ${attempt} — will retry`);
         continue;
       }
@@ -416,6 +559,10 @@ async function geminiGenerateContentRestDetailedInner(params: {
   }
 
   if (isGeminiResponseError(lastError)) {
+    throw lastError;
+  }
+
+  if (isGeminiApiError(lastError)) {
     throw lastError;
   }
 

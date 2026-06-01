@@ -1,3 +1,5 @@
+import { isGeminiApiError } from "./gemini-api-error";
+
 /**
  * Gemini 503 / UNAVAILABLE / „high demand” — késleltetett automatikus újrapróbálás.
  */
@@ -27,8 +29,21 @@ function collectErrorText(error: unknown): string {
   return parts.join(" ").toLowerCase();
 }
 
+function unwrapApiError(error: unknown): unknown {
+  if (isGeminiApiError(error)) return error;
+  if (error instanceof Error && isGeminiApiError(error.cause)) {
+    return error.cause;
+  }
+  return error;
+}
+
 /** HTTP 503, UNAVAILABLE, high demand, overloaded stb. */
 export function isGeminiOverloadError(error: unknown): boolean {
+  const api = unwrapApiError(error);
+  if (isGeminiApiError(api) && api.kind === "OVERLOAD") {
+    return true;
+  }
+
   const combined = collectErrorText(error);
 
   if (
