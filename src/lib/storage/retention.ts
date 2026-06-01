@@ -1,8 +1,8 @@
 import { addDaysToIsoDate, getAppTodayIso } from "../app-date";
 
-const DEFAULT_RETENTION_DAYS = 90;
+const DEFAULT_RETENTION_DAYS = 0;
 
-/** 0 = retention kikapcsolva (minden megmarad). Alapértelmezés: 90 nap. */
+/** 0 = retention kikapcsolva (minden megmarad). Alapértelmezés: kikapcsolva. */
 export function getRetentionDays(): number {
   const raw = process.env.DEVOTIONAL_RETENTION_DAYS?.trim();
   if (!raw) return DEFAULT_RETENTION_DAYS;
