@@ -25,6 +25,7 @@ import {
   TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
 } from "./devotional-text-complete";
 import { planAndGenerateNextDay } from "./gemini-planner";
+import { describeErrorForLog } from "./gemini-errors";
 import { generateAndSaveImage } from "./google-ai";
 import { isPexelsConfigured } from "./pexels";
 import type { Devotional, DynamicPlannedDay } from "./types";
@@ -68,8 +69,37 @@ async function runGeminiForTarget(
   const memory = buildDevotionalMemory(historyForMemory, {
     nextDayNumber: target.dayNumber,
   });
+  console.error(
+    "[generate-devotional:debug] runGeminiForTarget prepared memory",
+    JSON.stringify(
+      {
+        target,
+        historyCount: history.length,
+        historyForMemoryCount: historyForMemory.length,
+        usedVerseReferences: memory.usedVerseReferences,
+      },
+      null,
+      2
+    )
+  );
 
-  const planned = await planAndGenerateNextDay(memory);
+  let planned: DynamicPlannedDay;
+  try {
+    planned = await planAndGenerateNextDay(memory);
+  } catch (error) {
+    console.error(
+      "[generate-devotional:debug] planAndGenerateNextDay failed",
+      JSON.stringify(
+        {
+          target,
+          error: describeErrorForLog(error),
+        },
+        null,
+        2
+      )
+    );
+    throw error;
+  }
 
   assertVerseReferenceAllowed(planned.verse, memory, "pre-save");
 

@@ -22,6 +22,9 @@ export function getUserFriendlyGeminiMessage(
       return "A Gemini API kulcs nincs beállítva. Add hozzá a .env.local fájlhoz.";
     case "API_HTTP":
       return "A Gemini API HTTP hibát adott. Ellenőrizd a kulcsot és a modell nevét.";
+    case "METADATA_GENERATION":
+      return fallback ??
+        "A Gemini nem tudta előállítani az áhítat metadata részét. Nem használtunk tartalmi fallback igét; nézd meg a szervernaplóban az eredeti Gemini hibát.";
     case "DUPLICATE_VERSE":
       return fallback ??
         "Több már használt igehelyet is elutasítottunk, de most nem sikerült elég gyorsan friss alapigét találni.";

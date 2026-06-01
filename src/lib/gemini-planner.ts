@@ -37,6 +37,11 @@ import {
 import type { DynamicPlannedDay } from "./types";
 import { logGeminiError } from "./gemini-client";
 import {
+  describeErrorForLog,
+  GeminiMetadataGenerationError,
+  isGeminiMetadataGenerationError,
+} from "./gemini-errors";
+import {
   assemblePlannedDayFromParts,
   parseMetadataJson,
   type DevotionalMetadata,
@@ -63,6 +68,7 @@ type PlannerLogEvent =
   | "metadata_success"
   | "metadata_invalid_json"
   | "metadata_retry"
+  | "metadata_failure"
   | "body_start"
   | "body_success"
   | "body_token_overflow"
@@ -136,6 +142,19 @@ async function fetchMetadata(
       return metadata;
     } catch (error) {
       lastMetadataError = error;
+      console.error(
+        "[planAndGenerateNextDay:debug] metadata generation failed before candidate",
+        JSON.stringify(
+          {
+            attempt,
+            maxAttempts: METADATA_MAX_ATTEMPTS,
+            dayNumber: memory.nextDayNumber,
+            error: describeErrorForLog(error),
+          },
+          null,
+          2
+        )
+      );
       plannerLog("metadata_invalid_json", {
         attempt,
         error: error instanceof Error ? error.message : String(error),
@@ -147,19 +166,30 @@ async function fetchMetadata(
     }
   }
 
-  plannerLog("body_fallback", {
+  plannerLog("metadata_failure", {
     phase: "metadata",
-    reason: "using_defaults",
+    reason: "metadata_generation_failed",
     error: lastMetadataError instanceof Error ? lastMetadataError.message : undefined,
   });
+  console.error(
+    "[metadata-generation:debug] metadata fallback disabled after failures",
+    JSON.stringify(
+      {
+        dayNumber: memory.nextDayNumber,
+        fallbackUsed: false,
+        lastMetadataError: describeErrorForLog(lastMetadataError),
+        note:
+          "No hardcoded scripture metadata will be used. The original Gemini metadata error is preserved as cause.",
+      },
+      null,
+      2
+    )
+  );
 
-  return {
-    title: `${memory.nextDayNumber}. nap áhítata`,
-    scripture: "Zsoltárok 23:1 — Az Úr az én pásztorom",
-    category: memory.usedCategories.at(-1) || "Békesség",
-    excerpt: "Egy rövid pillanat csendben Isten előtt.",
-    imageKeywords: "quiet path, soft light, still lake, dawn",
-  };
+  throw new GeminiMetadataGenerationError(
+    "Gemini metadata generation failed before successful scripture candidate selection.",
+    { cause: lastMetadataError }
+  );
 }
 
 /**
@@ -535,6 +565,31 @@ export async function planAndGenerateNextDay(
       );
     } catch (error) {
       if (error instanceof DuplicateVerseExhaustedError) {
+        console.error(
+          "[planAndGenerateNextDay:debug] throwing duplicate verse exhausted",
+          JSON.stringify(
+            {
+              rejectedThisRun,
+              error: describeErrorForLog(error),
+            },
+            null,
+            2
+          )
+        );
+        throw error;
+      }
+
+      if (isGeminiMetadataGenerationError(error)) {
+        console.error(
+          "[metadata-generation:debug] throwing metadata generation error",
+          JSON.stringify(
+            {
+              error: describeErrorForLog(error),
+            },
+            null,
+            2
+          )
+        );
         throw error;
       }
 

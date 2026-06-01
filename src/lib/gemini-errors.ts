@@ -34,6 +34,66 @@ export interface GeminiErrorDetails {
   debug?: GeminiErrorDebugInfo;
 }
 
+export class GeminiMetadataGenerationError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = "GeminiMetadataGenerationError";
+    if (options?.cause !== undefined) {
+      this.cause = options.cause;
+    }
+  }
+}
+
+export function isGeminiMetadataGenerationError(
+  error: unknown
+): error is GeminiMetadataGenerationError {
+  return error instanceof GeminiMetadataGenerationError;
+}
+
+export function describeErrorForLog(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return {
+      type: typeof error,
+      value: String(error),
+      isDuplicateVerseExhaustedError: false,
+      isGeminiApiError: false,
+      isGeminiResponseError: false,
+      isGeminiOverloadError: false,
+    };
+  }
+
+  const cause = error.cause;
+  const causeSummary =
+    cause instanceof Error
+      ? {
+          name: cause.name,
+          message: cause.message,
+          isDuplicateVerseExhaustedError: isDuplicateVerseExhaustedError(cause),
+          isGeminiApiError: isGeminiApiError(cause),
+          isGeminiResponseError: isGeminiResponseError(cause),
+          isGeminiMetadataGenerationError:
+            isGeminiMetadataGenerationError(cause),
+          isGeminiOverloadError: isGeminiOverloadError(cause),
+        }
+      : cause === undefined
+        ? undefined
+        : {
+            type: typeof cause,
+            value: String(cause),
+          };
+
+  return {
+    name: error.name,
+    message: error.message,
+    isDuplicateVerseExhaustedError: isDuplicateVerseExhaustedError(error),
+    isGeminiApiError: isGeminiApiError(error),
+    isGeminiResponseError: isGeminiResponseError(error),
+    isGeminiMetadataGenerationError: isGeminiMetadataGenerationError(error),
+    isGeminiOverloadError: isGeminiOverloadError(error),
+    cause: causeSummary,
+  };
+}
+
 function mapApiKindToCode(kind: GeminiApiFailureKind): GeminiErrorCode {
   switch (kind) {
     case "AUTH":
@@ -102,6 +162,10 @@ function detectErrorCode(error: unknown, message: string): GeminiErrorCode {
 
   if (isDuplicateVerseExhaustedError(error)) {
     return "DUPLICATE_VERSE";
+  }
+
+  if (isGeminiMetadataGenerationError(error)) {
+    return "METADATA_GENERATION";
   }
 
   if (isGeminiOverloadError(error)) {
@@ -198,6 +262,8 @@ function buildHint(code: GeminiErrorCode): string | undefined {
       return "Állítsd be a GEMINI_API_KEY értéket a .env.local fájlban, majd indítsd újra a dev szervert.";
     case "GEMINI_OVERLOAD":
       return "A Gemini szervere átmenetileg túlterhelt. A rendszer automatikusan újrapróbálta (3–8–15 mp várakozással). Várj 1–2 percet, majd indítsd újra a generálást.";
+    case "METADATA_GENERATION":
+      return "Metadata generálás közben történt a valódi hiba. Keresd a [metadata-generation:debug], [gemini-api] FAILURE vagy [gemini-error-map:debug] sorokat a szervernaplóban.";
     case "DUPLICATE_VERSE":
       return "Ez nem API-hiba. A rendszer automatikusan újrapróbálta másik igehellyel (legfeljebb 3×). Indítsd újra a generálást.";
     case "API_HTTP":
@@ -219,7 +285,57 @@ function buildHint(code: GeminiErrorCode): string | undefined {
 }
 
 export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
+  if (isGeminiMetadataGenerationError(error)) {
+    const cause = error.cause;
+    const technicalMessage = formatGeminiErrorMessage(cause ?? error);
+    const causeCode = detectErrorCode(cause ?? error, technicalMessage);
+    const code: GeminiErrorCode = "METADATA_GENERATION";
+    const details: GeminiErrorDetails = {
+      message: getUserFriendlyGeminiMessage(code, technicalMessage),
+      code,
+      hint: buildHint(code),
+      tlsMode: getGeminiTlsMode(),
+      isDevelopment: isNodeDevelopment(),
+      finishReason: isGeminiResponseError(cause) ? cause.finishReason : undefined,
+      diagnostics: isGeminiResponseError(cause) ? cause.diagnostics : undefined,
+      debug:
+        isGeminiDebugUiEnabled() && isGeminiApiError(cause)
+          ? buildDebugFromApiError(cause)
+          : undefined,
+    };
+
+    console.error(
+      "[gemini-error-map:debug]",
+      JSON.stringify(
+        {
+          input: describeErrorForLog(error),
+          causeTechnicalMessage: technicalMessage,
+          causeDetectedCode: causeCode,
+          mappedCode: details.code,
+          branch: "metadata_generation",
+          outputMessage: details.message,
+        },
+        null,
+        2
+      )
+    );
+
+    return details;
+  }
+
   if (isDuplicateVerseExhaustedError(error)) {
+    console.error(
+      "[gemini-error-map:debug]",
+      JSON.stringify(
+        {
+          input: describeErrorForLog(error),
+          mappedCode: "DUPLICATE_VERSE",
+          branch: "direct_duplicate_error",
+        },
+        null,
+        2
+      )
+    );
     return {
       message: getUserFriendlyGeminiMessage("DUPLICATE_VERSE", error.message),
       code: "DUPLICATE_VERSE",
@@ -236,7 +352,7 @@ export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
     const code: GeminiErrorCode = "GEMINI_OVERLOAD";
     const apiCause = error instanceof Error ? error.cause : undefined;
 
-    return {
+    const details = {
       message: exhausted
         ? getUserFriendlyGeminiMessage(code)
         : getUserFriendlyGeminiMessage(code, formatGeminiErrorMessage(error)),
@@ -249,6 +365,20 @@ export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
           ? buildDebugFromApiError(apiCause)
           : undefined,
     };
+    console.error(
+      "[gemini-error-map:debug]",
+      JSON.stringify(
+        {
+          input: describeErrorForLog(error),
+          mappedCode: details.code,
+          branch: "gemini_overload",
+          outputMessage: details.message,
+        },
+        null,
+        2
+      )
+    );
+    return details;
   }
 
   const technicalMessage = formatGeminiErrorMessage(error);
@@ -277,6 +407,21 @@ export function toGeminiErrorDetails(error: unknown): GeminiErrorDetails {
   ) {
     base.debug = buildDebugFromApiError(error.cause);
   }
+
+  console.error(
+    "[gemini-error-map:debug]",
+    JSON.stringify(
+      {
+        input: describeErrorForLog(error),
+        technicalMessage,
+        mappedCode: base.code,
+        branch: "generic_detector",
+        outputMessage: base.message,
+      },
+      null,
+      2
+    )
+  );
 
   return base;
 }

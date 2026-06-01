@@ -8,6 +8,7 @@ export type GeminiErrorCode =
   | "QUOTA"
   | "API_HTTP"
   | "GEMINI_OVERLOAD"
+  | "METADATA_GENERATION"
   | "DUPLICATE_VERSE"
   | "SAFETY"
   | "EMPTY_RESPONSE"
@@ -32,6 +33,8 @@ export function getGeminiErrorTitle(code: GeminiErrorCode | string | undefined):
   switch (code) {
     case "GEMINI_OVERLOAD":
       return "Gemini átmenetileg túlterhelt";
+    case "METADATA_GENERATION":
+      return "Metadata generálás sikertelen";
     case "DUPLICATE_VERSE":
       return "Ismétlődő igehely";
     case "AUTH":
