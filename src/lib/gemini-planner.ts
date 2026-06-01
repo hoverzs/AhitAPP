@@ -31,6 +31,7 @@ import {
   DUPLICATE_VERSE_MAX_ATTEMPTS,
   DuplicateVerseExhaustedError,
   isForbiddenVerseReference,
+  logDuplicateVerseDebug,
   logDuplicateVerseAttempt,
 } from "./duplicate-verse-retry";
 import type { DynamicPlannedDay } from "./types";
@@ -387,6 +388,11 @@ export async function planAndGenerateNextDay(
     bodyGenerator: BODY_SOURCE_FUNCTION,
     duplicateVerseMaxAttempts: DUPLICATE_VERSE_MAX_ATTEMPTS,
   });
+  console.warn(
+    `[duplicate-verse:debug] current usedVerseReferences ${JSON.stringify(
+      memory.usedVerseReferences
+    )}`
+  );
 
   const rejectedThisRun: string[] = [];
 
@@ -401,6 +407,12 @@ export async function planAndGenerateNextDay(
       });
 
       const metadataRef = extractVerseReference(metadata.scripture);
+      logDuplicateVerseDebug(
+        `candidate phase=metadata attempt=${dupAttempt}`,
+        metadataRef,
+        memory,
+        rejectedThisRun
+      );
       if (
         isForbiddenVerseReference(metadataRef, memory, rejectedThisRun)
       ) {
@@ -454,6 +466,12 @@ export async function planAndGenerateNextDay(
       );
 
       const verseRef = extractVerseReference(planned.verse);
+      logDuplicateVerseDebug(
+        `candidate phase=assembled attempt=${dupAttempt}`,
+        verseRef,
+        memory,
+        rejectedThisRun
+      );
       if (isForbiddenVerseReference(verseRef, memory, rejectedThisRun)) {
         logDuplicateVerseAttempt("planAndGenerateNextDay", {
           attempt: dupAttempt,

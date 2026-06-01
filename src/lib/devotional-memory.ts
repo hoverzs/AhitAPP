@@ -31,7 +31,7 @@ export function extractVerseReference(verse: string): string {
   return trimmed.slice(0, 60);
 }
 
-function normalizeReference(ref: string): string {
+export function normalizeReference(ref: string): string {
   return ref
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -39,12 +39,29 @@ function normalizeReference(ref: string): string {
     .trim();
 }
 
+export interface VerseReferenceMatch {
+  reference: string;
+  normalized: string;
+}
+
+export function findVerseReferenceMatch(
+  candidate: string,
+  usedReferences: string[]
+): VerseReferenceMatch | undefined {
+  const norm = normalizeReference(candidate);
+  return usedReferences
+    .map((reference) => ({
+      reference,
+      normalized: normalizeReference(reference),
+    }))
+    .find((stored) => stored.normalized === norm);
+}
+
 export function isVerseReferenceUsed(
   candidate: string,
   usedReferences: string[]
 ): boolean {
-  const norm = normalizeReference(candidate);
-  return usedReferences.some((u) => normalizeReference(u) === norm);
+  return Boolean(findVerseReferenceMatch(candidate, usedReferences));
 }
 
 export function buildDevotionalMemory(

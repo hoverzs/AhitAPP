@@ -1,6 +1,8 @@
 import {
   extractVerseReference,
+  findVerseReferenceMatch,
   isVerseReferenceUsed,
+  normalizeReference,
   type DevotionalMemory,
 } from "./devotional-memory";
 
@@ -63,6 +65,104 @@ export function buildDuplicateVerseRejectionsBlock(
     .join("");
 }
 
+function getBookChapter(reference: string): string {
+  const match = reference.match(/^(.+?\d+):\d+/);
+  return match ? normalizeReference(match[1]) : "";
+}
+
+function getPartialReferenceMatches(
+  normalizedCandidate: string,
+  references: string[]
+): string[] {
+  if (!normalizedCandidate) return [];
+  return references.filter((reference) => {
+    const normalizedReference = normalizeReference(reference);
+    return (
+      normalizedReference !== normalizedCandidate &&
+      (normalizedReference.includes(normalizedCandidate) ||
+        normalizedCandidate.includes(normalizedReference))
+    );
+  });
+}
+
+function getSameChapterMatches(
+  extractedReference: string,
+  references: string[]
+): string[] {
+  const candidateChapter = getBookChapter(extractedReference);
+  if (!candidateChapter) return [];
+  return references.filter((reference) => {
+    const referenceChapter = getBookChapter(reference);
+    return (
+      referenceChapter === candidateChapter &&
+      normalizeReference(reference) !== normalizeReference(extractedReference)
+    );
+  });
+}
+
+export function getDuplicateVerseDebugSnapshot(
+  reference: string,
+  memory: DevotionalMemory,
+  rejectedThisRun: string[] = []
+): Record<string, unknown> {
+  const extractedReference = extractVerseReference(reference);
+  const normalizedCandidate = normalizeReference(extractedReference);
+  const storedMatch = findVerseReferenceMatch(
+    extractedReference,
+    memory.usedVerseReferences
+  );
+  const rejectedMatch = findVerseReferenceMatch(
+    extractedReference,
+    rejectedThisRun
+  );
+  const rejectedReferencesAlreadyInUsedList = rejectedThisRun.filter((ref) =>
+    isVerseReferenceUsed(ref, memory.usedVerseReferences)
+  );
+
+  return {
+    candidateReference: reference,
+    extractedReference,
+    normalizedCandidate,
+    storedMatch: storedMatch ?? null,
+    rejectedThisRunMatch: rejectedMatch ?? null,
+    rejectedBecause: storedMatch
+      ? "matched_usedVerseReferences_exact_normalized_reference"
+      : rejectedMatch
+        ? "matched_rejectedThisRun_exact_normalized_reference"
+        : null,
+    sameChapterMatchesOnly: getSameChapterMatches(
+      extractedReference,
+      memory.usedVerseReferences
+    ),
+    partialNormalizedMatchesOnly: getPartialReferenceMatches(
+      normalizedCandidate,
+      memory.usedVerseReferences
+    ),
+    rejectedThisRun,
+    rejectedReferencesAlreadyInUsedList,
+    matchingMode: "exact normalized reference equality",
+    normalizationSteps: [
+      "lowercase",
+      "collapse whitespace",
+      "remove periods",
+      "trim",
+    ],
+  };
+}
+
+export function logDuplicateVerseDebug(
+  phase: string,
+  reference: string,
+  memory: DevotionalMemory,
+  rejectedThisRun: string[] = []
+): void {
+  console.warn(
+    `[duplicate-verse:debug] ${phase} ${JSON.stringify(
+      getDuplicateVerseDebugSnapshot(reference, memory, rejectedThisRun)
+    )}`
+  );
+}
+
 export function isForbiddenVerseReference(
   reference: string,
   memory: DevotionalMemory,
@@ -95,6 +195,7 @@ export function assertVerseReferenceAllowed(
   context: string
 ): void {
   const ref = extractVerseReference(reference);
+  logDuplicateVerseDebug(`candidate phase=${context}`, ref, memory);
   if (!ref || !isVerseReferenceUsed(ref, memory.usedVerseReferences)) {
     return;
   }
