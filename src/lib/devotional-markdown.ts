@@ -4,6 +4,7 @@ import {
   rebuildDevotionalMarkdown,
 } from "./devotional-body-parser";
 import { deduplicateScripture } from "./scripture-dedup";
+import { stripEmbeddedHtml } from "./strip-embedded-html";
 
 export const DEVOTIONAL_MARKDOWN_MAX_CHARS = 3000;
 
@@ -61,7 +62,7 @@ export function normalizeDevotionalMarkdownBody(
   const omitAlapige =
     options?.omitAlapigeInContent ?? Boolean(options?.scriptureFallback?.trim());
 
-  let stripped = stripMarkdownFences(raw).trim();
+  let stripped = stripEmbeddedHtml(stripMarkdownFences(raw).trim());
   if (options?.scriptureFallback?.trim()) {
     stripped = deduplicateScripture(options.scriptureFallback, stripped).markdown;
   }

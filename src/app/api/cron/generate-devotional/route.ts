@@ -35,6 +35,23 @@ async function handleCron(request: NextRequest) {
 
   const result = await runDailyCronGeneration({ force });
 
+  if (result.outcome === "pending_retry") {
+    return NextResponse.json(
+      {
+        success: false,
+        pending_retry: true,
+        error: result.error,
+        code: result.code,
+        hint: result.hint,
+        generationJob: result.generationJob,
+        date: result.date,
+        message: result.message,
+        timestamp: result.timestamp,
+      },
+      { status: 202 }
+    );
+  }
+
   if (result.outcome === "error") {
     return NextResponse.json(
       {
@@ -43,6 +60,7 @@ async function handleCron(request: NextRequest) {
         code: result.code,
         hint: "hint" in result ? result.hint : undefined,
         debug: "debug" in result ? result.debug : undefined,
+        generationJob: result.generationJob,
         date: result.date,
         message: result.message,
         timestamp: result.timestamp,

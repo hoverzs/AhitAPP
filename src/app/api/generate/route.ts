@@ -28,7 +28,7 @@ export async function POST() {
   try {
     const { memory: memoryBefore } = await loadGenerationMemory();
     const result = await generateNextDevotional();
-    const adminContext = buildAdminDevotionalContext(await readDevotionals());
+    const adminContext = await buildAdminDevotionalContext(await readDevotionals());
 
     return NextResponse.json({
       devotional: result.devotional,

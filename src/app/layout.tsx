@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { SiteHeaderWrapper } from "@/components/SiteHeaderWrapper";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -23,6 +24,7 @@ export default async function RootLayout({
         <SiteHeaderWrapper />
         <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">{children}</main>
         <SiteFooter />
+        <Analytics />
       </body>
     </html>
   );

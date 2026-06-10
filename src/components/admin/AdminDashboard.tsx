@@ -37,6 +37,11 @@ import {
 } from "@/lib/gemini-error-labels";
 import { formatGeminiDebugMeta } from "@/lib/gemini-debug-display";
 import { useGeminiLoadingMessage } from "@/hooks/useGeminiLoadingMessage";
+import {
+  formatGenerationJobTimestamp,
+  generationJobStatusLabel,
+} from "@/lib/generation-job-labels";
+import type { AdminDailyGenerationJobSummary } from "@/lib/types";
 
 interface AdminDashboardProps {
   memory: DevotionalMemory;
@@ -55,6 +60,8 @@ interface ApiErrorPayload {
   tlsMode?: string;
   isDevelopment?: boolean;
   debug?: GeminiErrorDebugInfo;
+  pending_retry?: boolean;
+  generationJob?: AdminDailyGenerationJobSummary;
 }
 
 interface PingResult {
@@ -225,6 +232,21 @@ export function AdminDashboard({
           status?: string;
         };
       };
+
+      if (data.generationJob) {
+        setContext((prev) => ({
+          ...prev,
+          todayGenerationJob: data.generationJob,
+        }));
+      }
+
+      if (res.status === 202 || data.pending_retry) {
+        setTodayCronNotice(
+          data.hint ??
+            "Az első próba sikertelen volt — a rendszer automatikusan újrapróbál (1/3/5 perc, majd 00:30–06:00)."
+        );
+        return;
+      }
 
       if (!res.ok || !data.success) {
         const friendlyError =
@@ -658,6 +680,80 @@ export function AdminDashboard({
                   <p className="mt-4 text-sm text-ink-muted rounded-xl bg-ivory-50 border border-ivory-200 px-4 py-3">
                     {todayCronNotice}
                   </p>
+                )}
+
+                {context.todayGenerationJob && (
+                  <div
+                    className={`mt-6 rounded-xl border px-4 py-4 text-sm ${
+                      context.todayGenerationJob.status === "failed"
+                        ? "bg-red-50/80 border-red-200/70 text-red-900"
+                        : context.todayGenerationJob.status === "published"
+                          ? "bg-emerald-50/80 border-emerald-200/70 text-emerald-900"
+                          : "bg-amber-50/60 border-amber-200/60 text-amber-950"
+                    }`}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-3">
+                      Mai automatikus generálás
+                    </p>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                          Státusz
+                        </dt>
+                        <dd className="font-medium">
+                          {generationJobStatusLabel(context.todayGenerationJob.status)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                          Próbálkozások
+                        </dt>
+                        <dd>{context.todayGenerationJob.retry_count}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                          Utolsó kísérlet
+                        </dt>
+                        <dd>
+                          {formatGenerationJobTimestamp(
+                            context.todayGenerationJob.last_attempt_at
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                          Következő retry
+                        </dt>
+                        <dd>
+                          {formatGenerationJobTimestamp(
+                            context.todayGenerationJob.next_retry_at
+                          )}
+                        </dd>
+                      </div>
+                      {context.todayGenerationJob.published_at && (
+                        <div className="sm:col-span-2">
+                          <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                            Sikeres generálás
+                          </dt>
+                          <dd>
+                            {formatGenerationJobTimestamp(
+                              context.todayGenerationJob.published_at
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                      {context.todayGenerationJob.last_error && (
+                        <div className="sm:col-span-2">
+                          <dt className="text-[11px] uppercase tracking-wide opacity-70">
+                            Utolsó hiba
+                          </dt>
+                          <dd className="text-[13px] leading-relaxed">
+                            {context.todayGenerationJob.last_error}
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
                 )}
               </div>
             </AdminPanel>

@@ -1,4 +1,5 @@
 import { parseVerseDisplay } from "@/lib/devotional-excerpt";
+import { stripEmbeddedHtml } from "@/lib/strip-embedded-html";
 
 interface ScriptureDisplayProps {
   /** Markdown blockquote vagy sima szöveg (pl. verse mező). */
@@ -7,12 +8,14 @@ interface ScriptureDisplayProps {
 }
 
 function plainScriptureText(source: string): string {
-  return source
-    .split("\n")
-    .map((line) => line.replace(/^>\s?/, "").trim())
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  return stripEmbeddedHtml(
+    source
+      .split("\n")
+      .map((line) => line.replace(/^>\s?/, "").trim())
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+  );
 }
 
 /** Kiemelt alapige — félkövér, rövidebb szöveg nagyobb betűmérettel. */

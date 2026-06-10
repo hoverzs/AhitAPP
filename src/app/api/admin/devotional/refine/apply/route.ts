@@ -73,7 +73,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       devotional,
-      adminContext: buildAdminDevotionalContext(await readDevotionals()),
+      adminContext: await buildAdminDevotionalContext(await readDevotionals()),
     });
   } catch (err) {
     const storage = storageErrorResponse(err);

@@ -1,3 +1,5 @@
+import { stripEmbeddedHtml } from "./strip-embedded-html";
+
 /**
  * Áhítat szekciótörzs előkészítése react-markdownhoz.
  * Nem módosítja a ### címsorokat (csak szekció body).
@@ -45,6 +47,7 @@ export function prepareDevotionalMarkdownForRender(source: string): string {
   let text = source.trim();
   if (!text) return "";
 
+  text = stripEmbeddedHtml(text);
   text = stripInlineCodeFences(text);
   text = normalizeAsterisks(text);
   text = balanceBoldMarkers(text);

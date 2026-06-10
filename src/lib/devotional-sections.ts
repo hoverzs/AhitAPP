@@ -1,4 +1,5 @@
 import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
+import { stripEmbeddedHtml } from "./strip-embedded-html";
 import { stripDuplicateDevotionalTitle } from "./devotional-title-dedup";
 import {
   deduplicateScripture,
@@ -78,7 +79,12 @@ function resolveSectionId(headerLine: string): DevotionalSectionId {
 function resolveSectionTitle(id: DevotionalSectionId, headerLine: string): string {
   const entry = SECTION_ALIASES.find((e) => e.id === id);
   if (entry && id !== "egyeb") return entry.title;
-  return headerLine.replace(/^#+\s*/, "").trim() || "Áhítat";
+  const raw = stripEmbeddedHtml(headerLine.replace(/^#+\s*/, "").trim());
+  return raw || "Áhítat";
+}
+
+function cleanSectionBody(body: string): string {
+  return stripEmbeddedHtml(body.trim());
 }
 
 /**
@@ -167,7 +173,7 @@ export function parseDevotionalSections(
     const start = (match.index ?? 0) + match[0].length;
     const end =
       i + 1 < matches.length ? (matches[i + 1].index ?? trimmed.length) : trimmed.length;
-    const body = trimmed.slice(start, end).trim();
+    const body = cleanSectionBody(trimmed.slice(start, end));
 
     const id = resolveSectionId(headerText);
     const title = resolveSectionTitle(id, headerText);
@@ -201,13 +207,15 @@ function finalizeSections(
   title?: string
 ): DevotionalSection[] {
   const enriched = enrichSectionsWithTolerantMeditation(content, sections);
-  return enriched.map((section) => {
-    if (section.id !== "alapige" || !title?.trim()) return section;
-    return {
-      ...section,
-      body: stripDuplicateDevotionalTitle(section.body, title),
-    };
-  }).filter((s) => s.body.length > 0);
+  return enriched
+    .map((section) => {
+      let body = section.body;
+      if (section.id === "alapige" && title?.trim()) {
+        body = stripDuplicateDevotionalTitle(body, title);
+      }
+      return { ...section, body: cleanSectionBody(body) };
+    })
+    .filter((s) => s.body.length > 0);
 }
 
 /**
@@ -253,7 +261,7 @@ export function formatVerseAsBlockquote(verse: string): string {
 
 /** Lista/előnézet: markdown jelek eltávolítása */
 export function stripMarkdownForPreview(text: string, maxLen = 140): string {
-  const plain = text
+  const plain = stripEmbeddedHtml(text)
     .replace(/^#+\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
