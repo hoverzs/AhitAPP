@@ -1,7 +1,8 @@
 import type { AdminDailyGenerationJobSummary } from "./types";
+import type { GenerationJobStatus } from "./generation-job-types";
 
 export function generationJobStatusLabel(
-  status: AdminDailyGenerationJobSummary["status"]
+  status: GenerationJobStatus | AdminDailyGenerationJobSummary["status"]
 ): string {
   switch (status) {
     case "running":

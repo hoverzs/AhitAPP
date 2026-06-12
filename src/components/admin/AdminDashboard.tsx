@@ -676,6 +676,31 @@ export function AdminDashboard({
                   </p>
                 )}
 
+                {context.externalRetryCron && (
+                  <div className="mt-6 rounded-xl border border-ivory-200 bg-ivory-50/80 px-4 py-4 text-sm text-ink-muted">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-ink mb-2">
+                      Külső retry ütemező (Vercel Hobby)
+                    </p>
+                    <p className="leading-relaxed">{context.externalRetryCron.helpText}</p>
+                    <p className="mt-3 text-[13px]">
+                      <span className="font-medium text-ink">Endpoint:</span>{" "}
+                      <code className="text-xs break-all bg-white/80 px-1.5 py-0.5 rounded border border-ivory-200">
+                        {context.externalRetryCron.endpointUrl}
+                      </code>
+                    </p>
+                    <p className="mt-2 text-[13px]">
+                      <span className="font-medium text-ink">Javasolt futtatás:</span>{" "}
+                      {context.externalRetryCron.scheduleLabel}
+                    </p>
+                    <p className="mt-2 text-[12px] leading-relaxed">
+                      Hitelesítés:{" "}
+                      <code className="text-xs">Authorization: Bearer &lt;CRON_SECRET&gt;</code>
+                      . A <code className="text-xs">CRON_SECRET</code> értékét a Vercel
+                      Environment Variables között állítsd be — itt nem jelenik meg.
+                    </p>
+                  </div>
+                )}
+
                 {context.todayGenerationJob && (
                   <div
                     className={`mt-6 rounded-xl border px-4 py-4 text-sm ${

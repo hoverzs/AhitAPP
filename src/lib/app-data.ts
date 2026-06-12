@@ -18,6 +18,11 @@ import { resolveManualGenerationTarget } from "./generation-target";
 import { getGenerationJob } from "./generation-job-storage";
 import { toAdminJobSummary } from "./generation-job-types";
 import { getAppTodayIso } from "./app-date";
+import {
+  EXTERNAL_RETRY_CRON_HELP,
+  EXTERNAL_RETRY_SCHEDULE_LABEL,
+  getExternalRetryCronUrl,
+} from "./cron-retry-config";
 import { GEMINI_PLANNER_MODEL } from "./config";
 import { getLatestDevotional, getRecentDevotionals } from "./dashboard";
 import { resolveDisplayVerse, type DisplayVerse } from "./display-verse";
@@ -148,6 +153,11 @@ export async function buildAdminDevotionalContext(
     },
     reviewWarning,
     todayGenerationJob,
+    externalRetryCron: {
+      endpointUrl: getExternalRetryCronUrl(),
+      scheduleLabel: EXTERNAL_RETRY_SCHEDULE_LABEL,
+      helpText: EXTERNAL_RETRY_CRON_HELP,
+    },
   };
 }
 

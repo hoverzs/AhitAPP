@@ -1,15 +1,29 @@
 import type { NextRequest } from "next/server";
 import { isAdminAuthenticated } from "./auth";
 
-/** Vercel Cron: Authorization: Bearer <CRON_SECRET> */
-export function isAuthorizedCronRequest(request: NextRequest): boolean {
+function getCronSecret(): string | null {
   const secret = process.env.CRON_SECRET?.trim();
+  return secret || null;
+}
+
+/**
+ * Vercel / külső cron hitelesítés.
+ * Elsődleges: Authorization: Bearer <CRON_SECRET>
+ * Tartalék: ?secret=<CRON_SECRET> (nem ajánlott élesben)
+ */
+export function isAuthorizedCronRequest(request: NextRequest): boolean {
+  const secret = getCronSecret();
   if (!secret) {
     return false;
   }
 
   const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${secret}`;
+  if (authHeader === `Bearer ${secret}`) {
+    return true;
+  }
+
+  const querySecret = request.nextUrl.searchParams.get("secret")?.trim();
+  return querySecret === secret;
 }
 
 /** Cron Bearer token vagy bejelentkezett admin munkamenet. */

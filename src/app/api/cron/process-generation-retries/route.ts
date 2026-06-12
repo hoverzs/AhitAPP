@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAuthorizedCronOrAdminRequest } from "@/lib/cron-auth";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 import { processDueGenerationRetries } from "@/lib/generation-job-runner";
-import { toAdminJobSummary } from "@/lib/generation-job-types";
+import { buildRetryProcessorResponse } from "@/lib/cron-retry-response";
 import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
@@ -9,51 +9,56 @@ export const dynamic = "force-dynamic";
 
 /**
  * Esedékes óránkénti generálási retry-k (+1h / +2h / +3h az első hiba után).
- * Nincs gyakori Vercel cron (Hobby plan) — admin, külső ütemező vagy napi cron elején hívható.
+ *
+ * Vercel Hobby: nincs gyakori cron a vercel.json-ban — külső ütemező hívja
+ * (pl. cron-job.org) 01:05, 02:05, 03:05 Europe/Bucharest idő szerint.
+ *
+ * Lokális teszt:
+ *   curl -X POST http://localhost:3000/api/cron/process-generation-retries \
+ *     -H "Authorization: Bearer <CRON_SECRET>"
+ *
+ * Production teszt:
+ *   curl -X POST https://ahit-app.vercel.app/api/cron/process-generation-retries \
+ *     -H "Authorization: Bearer <CRON_SECRET>"
+ *
+ * Tartalék (nem ajánlott): ?secret=<CRON_SECRET>
  */
 async function handleRetryProcessor(request: NextRequest) {
-  const auth = await isAuthorizedCronOrAdminRequest(request);
-  if (!auth) {
+  if (!process.env.CRON_SECRET?.trim()) {
     return NextResponse.json(
-      { success: false, error: "Nincs jogosultság ehhez a művelethez." },
+      {
+        ok: false,
+        processed: false,
+        status: null,
+        message: "CRON_SECRET nincs beállítva a szerveren.",
+        nextRetryAt: null,
+        retryCount: 0,
+      },
+      { status: 503 }
+    );
+  }
+
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        processed: false,
+        status: null,
+        message: "Unauthorized — érvénytelen vagy hiányzó CRON_SECRET.",
+        nextRetryAt: null,
+        retryCount: 0,
+      },
       { status: 401 }
     );
   }
 
   const result = await processDueGenerationRetries();
+  const body = buildRetryProcessorResponse(result);
 
-  if ("processed" in result) {
-    return NextResponse.json({
-      success: true,
-      processed: false,
-      reason: result.reason,
-    });
-  }
+  const httpStatus =
+    body.processed && body.status === "failed" ? 500 : 200;
 
-  if (result.success && result.devotional) {
-    return NextResponse.json({
-      success: true,
-      processed: true,
-      created: !result.skipped,
-      devotional: {
-        dayNumber: result.devotional.dayNumber,
-        date: result.devotional.date,
-        title: result.devotional.title,
-        status: result.devotional.status,
-      },
-      generationJob: toAdminJobSummary(result.job),
-    });
-  }
-
-  return NextResponse.json({
-    success: result.job.status !== "failed",
-    processed: true,
-    pending_retry: result.job.status === "pending_retry",
-    failed: result.job.status === "failed",
-    error: result.error,
-    code: result.code,
-    generationJob: toAdminJobSummary(result.job),
-  });
+  return NextResponse.json(body, { status: httpStatus });
 }
 
 export async function GET(request: NextRequest) {

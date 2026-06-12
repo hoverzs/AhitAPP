@@ -128,6 +128,12 @@ export interface AdminDevotionalContext {
   reviewWarning?: string;
   /** Mai automatikus generálás állapota (cron + retry). */
   todayGenerationJob?: AdminDailyGenerationJobSummary | null;
+  /** Külső cron retry endpoint — Hobby plan segítség (CRON_SECRET nélkül). */
+  externalRetryCron?: {
+    endpointUrl: string;
+    scheduleLabel: string;
+    helpText: string;
+  };
 }
 
 export interface AdminDevotionalListItem {
