@@ -5,12 +5,12 @@ export type GenerationJobStatus =
   | "published"
   | "failed";
 
-export type GenerationJobPhase = "fast" | "scheduled";
+export type GenerationJobPhase = "initial" | "hourly";
 
 export interface GenerationAttemptLogEntry {
   at: string;
   attemptNumber: number;
-  phase: "initial" | GenerationJobPhase;
+  phase: GenerationJobPhase;
   success: boolean;
   message?: string;
   error?: string;
@@ -20,11 +20,12 @@ export interface GenerationAttemptLogEntry {
 export interface DailyGenerationJob {
   date: string;
   status: GenerationJobStatus;
+  /** Összes generálási kísérlet (első + retry-k). */
   retry_count: number;
-  /** Hány gyors (1/3/5 perc) késleltetés lett már ütemezve. */
-  fast_retry_index: number;
-  /** Következő ütemezett slot indexe a SCHEDULED_RETRY_MINUTES tömbben. */
-  scheduled_retry_index: number;
+  /** Az első sikertelen generálás időpontja — óránkénti retry horgony. */
+  first_failed_at: string | null;
+  /** Ütemezett óránkénti retry-k száma az első hiba után (max. 3). */
+  auto_retry_count: number;
   phase: GenerationJobPhase;
   last_error: string | null;
   last_error_code: string | null;
@@ -45,6 +46,7 @@ export interface AdminDailyGenerationJobSummary {
   next_retry_at: string | null;
   published_at: string | null;
   phase: GenerationJobPhase;
+  auto_retry_count: number;
 }
 
 export function toAdminJobSummary(
@@ -60,6 +62,7 @@ export function toAdminJobSummary(
     next_retry_at: job.next_retry_at,
     published_at: job.published_at,
     phase: job.phase,
+    auto_retry_count: job.auto_retry_count,
   };
 }
 
@@ -69,9 +72,9 @@ export function createEmptyGenerationJob(date: string): DailyGenerationJob {
     date,
     status: "running",
     retry_count: 0,
-    fast_retry_index: 0,
-    scheduled_retry_index: 0,
-    phase: "fast",
+    first_failed_at: null,
+    auto_retry_count: 0,
+    phase: "initial",
     last_error: null,
     last_error_code: null,
     last_attempt_at: null,
@@ -79,5 +82,25 @@ export function createEmptyGenerationJob(date: string): DailyGenerationJob {
     created_at: now,
     published_at: null,
     logs: [],
+  };
+}
+
+/** Régi job rekordok (fast/scheduled retry) kompatibilitása. */
+export function normalizeGenerationJob(
+  raw: DailyGenerationJob & {
+    fast_retry_index?: number;
+    scheduled_retry_index?: number;
+  }
+): DailyGenerationJob {
+  return {
+    ...raw,
+    first_failed_at: raw.first_failed_at ?? raw.last_attempt_at ?? null,
+    auto_retry_count:
+      raw.auto_retry_count ??
+      Math.min(
+        3,
+        (raw.fast_retry_index ?? 0) + (raw.scheduled_retry_index ?? 0)
+      ),
+    phase: raw.phase === "hourly" ? "hourly" : raw.phase === "initial" ? "initial" : "hourly",
   };
 }

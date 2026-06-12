@@ -7,7 +7,10 @@ import {
   GenerationSkippedError,
 } from "./generate-devotional";
 import { getDevotionalByDate } from "./generation-target";
-import { scheduleNextRetry } from "./generation-job-schedule";
+import {
+  MAX_AUTO_RETRIES,
+  scheduleNextRetry,
+} from "./generation-job-schedule";
 import {
   getGenerationJob,
   saveGenerationJob,
@@ -16,6 +19,7 @@ import {
   createEmptyGenerationJob,
   type DailyGenerationJob,
   type GenerationAttemptLogEntry,
+  type GenerationJobPhase,
 } from "./generation-job-types";
 import { isGeminiOverloadError } from "./gemini-overload-retry";
 
@@ -61,9 +65,9 @@ export function isRetriableCronGenerationError(error: unknown): boolean {
   );
 }
 
-function resolveAttemptPhase(job: DailyGenerationJob): GenerationAttemptLogEntry["phase"] {
+function resolveAttemptPhase(job: DailyGenerationJob): GenerationJobPhase {
   if (job.retry_count === 0) return "initial";
-  return job.phase;
+  return "hourly";
 }
 
 function appendLog(
@@ -84,6 +88,13 @@ async function markJobPublished(
   job.next_retry_at = null;
   job.last_error = null;
   job.last_error_code = null;
+  await saveGenerationJob(job);
+  return job;
+}
+
+async function markJobFailed(job: DailyGenerationJob): Promise<DailyGenerationJob> {
+  job.status = "failed";
+  job.next_retry_at = null;
   await saveGenerationJob(job);
   return job;
 }
@@ -160,6 +171,37 @@ export async function runGenerationAttempt(
     return { success: true, skipped: true, job };
   }
 
+  if (
+    job.status === "pending_retry" &&
+    job.next_retry_at &&
+    new Date(job.next_retry_at).getTime() > Date.now() &&
+    trigger !== "manual"
+  ) {
+    jobWarn("Következő retry még nem esedékes — kihagyva", {
+      date,
+      next_retry_at: job.next_retry_at,
+      trigger,
+    });
+    return {
+      success: false,
+      job,
+      error: job.last_error ?? "Várakozás a következő automatikus újrapróbára.",
+    };
+  }
+
+  if (job.auto_retry_count >= MAX_AUTO_RETRIES && job.status === "pending_retry") {
+    await markJobFailed(job);
+    jobError("auto_retry_count elérte a maximumot — FAILED", {
+      date,
+      auto_retry_count: job.auto_retry_count,
+    });
+    return {
+      success: false,
+      job,
+      error: job.last_error ?? "Három óránkénti újrapróba után sem sikerült.",
+    };
+  }
+
   job.status = "running";
   job.last_attempt_at = new Date().toISOString();
   await saveGenerationJob(job);
@@ -168,6 +210,7 @@ export async function runGenerationAttempt(
   jobLog(`Generálás indult (${trigger}, ${phase})`, {
     date,
     retry_count: job.retry_count,
+    auto_retry_count: job.auto_retry_count,
     next_retry_at: job.next_retry_at,
   });
 
@@ -207,9 +250,9 @@ export async function runGenerationAttempt(
           message: error.reason,
         });
         await markJobPublished(
-      job,
-      existing.generatedAt ?? existing.updatedAt ?? new Date().toISOString()
-    );
+          job,
+          existing.generatedAt ?? existing.updatedAt ?? new Date().toISOString()
+        );
         return { success: true, skipped: true, job, devotional: existing };
       }
     }
@@ -236,9 +279,7 @@ export async function runGenerationAttempt(
     });
 
     if (!isRetriableCronGenerationError(error)) {
-      job.status = "failed";
-      job.next_retry_at = null;
-      await saveGenerationJob(job);
+      await markJobFailed(job);
       jobError("Nem újrapróbálható hiba — FAILED", {
         date,
         code: details.code,
@@ -248,10 +289,11 @@ export async function runGenerationAttempt(
 
     const nextAt = scheduleNextRetry(job);
     if (!nextAt) {
-      job.status = "failed";
-      job.next_retry_at = null;
-      await saveGenerationJob(job);
-      jobError("Összes retry kimerült — FAILED", { date, retry_count: job.retry_count });
+      await markJobFailed(job);
+      jobError("Összes óránkénti retry kimerült — FAILED", {
+        date,
+        auto_retry_count: job.auto_retry_count,
+      });
       return { success: false, job, error: details.message, code: details.code };
     }
 
@@ -259,21 +301,28 @@ export async function runGenerationAttempt(
     job.next_retry_at = nextAt.toISOString();
     await saveGenerationJob(job);
 
-    jobWarn("PENDING_RETRY — következő próba ütemezve", {
+    jobWarn("PENDING_RETRY — következő óránkénti próba ütemezve", {
       date,
       retry_count: job.retry_count,
+      auto_retry_count: job.auto_retry_count,
       next_retry_at: job.next_retry_at,
-      phase: job.phase,
     });
 
     return { success: false, job, error: details.message, code: details.code };
   }
 }
 
-/** Esedékes retry feladat feldolgozása (mai nap). */
+export type ProcessDueRetriesResult =
+  | { processed: false; reason: string }
+  | GenerationAttemptResult;
+
+/**
+ * Esedékes retry feladat feldolgozása (mai nap) — idempotens.
+ * Hobby plan: nincs gyakori Vercel cron; admin / külső hívás vagy napi cron elején.
+ */
 export async function processDueGenerationRetries(
   now = new Date()
-): Promise<GenerationAttemptResult | { processed: false; reason: string }> {
+): Promise<ProcessDueRetriesResult> {
   const date = getAppTodayIso(now);
   const job = await getGenerationJob(date);
 
@@ -281,12 +330,33 @@ export async function processDueGenerationRetries(
     return { processed: false, reason: "Nincs aktív feladat a mai napra." };
   }
 
-  if (job.status === "published" || job.status === "failed") {
-    return { processed: false, reason: `Feladat állapota: ${job.status}` };
+  const idempotent = await ensureDevotionalNotAlreadyPublished(date, job);
+  if (idempotent.skipped) {
+    return {
+      success: true,
+      skipped: true,
+      job: idempotent.job ?? job,
+    };
+  }
+
+  if (job.status === "published") {
+    return { processed: false, reason: "A mai generálás már sikeres." };
+  }
+
+  if (job.status === "failed") {
+    return { processed: false, reason: "A mai generálás véglegesen sikertelen (FAILED)." };
   }
 
   if (job.status !== "pending_retry") {
-    return { processed: false, reason: "Nincs függőben lévő retry." };
+    return { processed: false, reason: "Nincs függőben lévő retry (pending_retry)." };
+  }
+
+  if (job.auto_retry_count >= MAX_AUTO_RETRIES) {
+    await markJobFailed(job);
+    return {
+      processed: false,
+      reason: `Elértük a maximum ${MAX_AUTO_RETRIES} óránkénti újrapróbát — FAILED.`,
+    };
   }
 
   if (!job.next_retry_at) {
@@ -300,12 +370,12 @@ export async function processDueGenerationRetries(
     };
   }
 
-  jobLog("Ütemezett retry indítása", {
+  jobLog("Ütemezett óránkénti retry indítása", {
     date,
     retry_count: job.retry_count,
+    auto_retry_count: job.auto_retry_count,
     next_retry_at: job.next_retry_at,
   });
 
-  const result = await runGenerationAttempt(date, { trigger: "retry_processor" });
-  return result;
+  return runGenerationAttempt(date, { trigger: "retry_processor" });
 }

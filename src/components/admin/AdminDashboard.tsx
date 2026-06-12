@@ -243,7 +243,7 @@ export function AdminDashboard({
       if (res.status === 202 || data.pending_retry) {
         setTodayCronNotice(
           data.hint ??
-            "Az első próba sikertelen volt — a rendszer automatikusan újrapróbál (1/3/5 perc, majd 00:30–06:00)."
+            "Az első próba sikertelen — legfeljebb 3 óránkénti automatikus újrapróba ütemezve (+1h, +2h, +3h)."
         );
         return;
       }
@@ -702,7 +702,12 @@ export function AdminDashboard({
                         <dt className="text-[11px] uppercase tracking-wide opacity-70">
                           Próbálkozások
                         </dt>
-                        <dd>{context.todayGenerationJob.retry_count}</dd>
+                        <dd>
+                          {context.todayGenerationJob.retry_count}
+                          {context.todayGenerationJob.auto_retry_count > 0
+                            ? ` (${context.todayGenerationJob.auto_retry_count}/3 óránkénti retry)`
+                            : ""}
+                        </dd>
                       </div>
                       <div>
                         <dt className="text-[11px] uppercase tracking-wide opacity-70">

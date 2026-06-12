@@ -6,7 +6,10 @@ import {
   isRedisStorageConfigured,
 } from "./storage/redis-storage";
 import { resolveStorageDriver } from "./storage";
-import type { DailyGenerationJob } from "./generation-job-types";
+import {
+  normalizeGenerationJob,
+  type DailyGenerationJob,
+} from "./generation-job-types";
 
 export const REDIS_GENERATION_JOB_PREFIX = "ahitapp:generation:job:";
 
@@ -58,11 +61,12 @@ export async function getGenerationJob(
     const redis = getRedisClient();
     if (!redis) return null;
     const raw = await redis.get<DailyGenerationJob>(jobRedisKey(date));
-    return raw ?? null;
+    return raw ? normalizeGenerationJob(raw) : null;
   }
 
   const all = await readLocalJobsFile();
-  return all[date] ?? null;
+  const job = all[date];
+  return job ? normalizeGenerationJob(job) : null;
 }
 
 export async function saveGenerationJob(job: DailyGenerationJob): Promise<void> {

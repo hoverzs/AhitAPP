@@ -8,8 +8,8 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 /**
- * Ütemezett generálási retry-k feldolgozása (gyors 1/3/5 perc + 00:30–06:00).
- * Vercel cron: every 5 min between 00:00–05:59 UTC (vercel.json).
+ * Esedékes óránkénti generálási retry-k (+1h / +2h / +3h az első hiba után).
+ * Nincs gyakori Vercel cron (Hobby plan) — admin, külső ütemező vagy napi cron elején hívható.
  */
 async function handleRetryProcessor(request: NextRequest) {
   const auth = await isAuthorizedCronOrAdminRequest(request);

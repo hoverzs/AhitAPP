@@ -108,7 +108,8 @@ export interface AdminDailyGenerationJobSummary {
   last_attempt_at: string | null;
   next_retry_at: string | null;
   published_at: string | null;
-  phase: "fast" | "scheduled";
+  phase: "initial" | "hourly";
+  auto_retry_count: number;
 }
 
 export interface AdminDevotionalContext {

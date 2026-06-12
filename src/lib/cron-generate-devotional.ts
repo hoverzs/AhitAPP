@@ -6,7 +6,11 @@ import { readDevotionals } from "./devotionals";
 import { GenerationSkippedError } from "./generate-devotional";
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import { getDevotionalByDate, getTodayDateIso } from "./generation-target";
-import { runGenerationAttempt } from "./generation-job-runner";
+import {
+  processDueGenerationRetries,
+  runGenerationAttempt,
+} from "./generation-job-runner";
+import { MAX_AUTO_RETRIES } from "./generation-job-schedule";
 import { toAdminJobSummary } from "./generation-job-types";
 import { isPexelsConfigured } from "./pexels";
 import { getAppTodayIso, logAppDateDebug } from "./app-date";
@@ -103,6 +107,32 @@ export async function runDailyCronGeneration(options?: {
   }
 
   try {
+    const dueRetry = await processDueGenerationRetries();
+    if (!("processed" in dueRetry) && dueRetry.success && dueRetry.devotional) {
+      const d = dueRetry.devotional;
+      logPexelsResult(d);
+      cronLog("Esedékes óránkénti retry sikeres", {
+        dayNumber: d.dayNumber,
+        retry_count: dueRetry.job.retry_count,
+      });
+      return {
+        outcome: dueRetry.skipped ? "skipped" : "created",
+        message: `A ${d.dayNumber}. nap (${d.date}) sikeresen generálva (ütemezett retry).`,
+        date,
+        timestamp,
+        devotional: {
+          dayNumber: d.dayNumber,
+          date: d.date,
+          title: d.title,
+          status: d.status,
+          imageUrl: d.imageUrl,
+          imageSource: d.imageSource,
+          pexelsPhotoId: d.pexelsPhotoId,
+        },
+        generationJob: toAdminJobSummary(dueRetry.job),
+      };
+    }
+
     const attempt = await runGenerationAttempt(date, { trigger: "cron" });
     const jobSummary = toAdminJobSummary(attempt.job);
 
@@ -180,7 +210,7 @@ export async function runDailyCronGeneration(options?: {
         timestamp,
         error: attempt.error,
         code: attempt.code,
-        hint: "A rendszer 1/3/5 perces gyors, majd 00:30–06:00 közötti ütemezett próbákat futtat.",
+        hint: `Legfeljebb ${MAX_AUTO_RETRIES} óránkénti automatikus újrapróba (+1h, +2h, +3h az első hiba után). Hobby plan: külső ütemező vagy admin hívás szükséges az esedékes retry-khoz.`,
         generationJob: jobSummary,
       };
     }
