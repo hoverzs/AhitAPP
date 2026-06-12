@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
+import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
 import { isPublicDevotional } from "@/lib/devotional-status";
 import type { Metadata } from "next";
 import { getDevotionalByDay } from "@/lib/devotionals";
-import { CopyButton } from "@/components/CopyButton";
-import { formatDevotionalForFacebook, getPublicDevotionalUrl } from "@/lib/facebook";
+import { getPublicDevotionalUrl } from "@/lib/facebook";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
 
 export const dynamic = "force-dynamic";
@@ -53,8 +53,6 @@ export default async function DevotionalPage({ params }: PageProps) {
   }
 
   const publicUrl = getPublicDevotionalUrl(dayNumber);
-  const facebookText = formatDevotionalForFacebook(devotional, publicUrl);
-  const facebookShort = devotional.facebookCopy?.trim();
 
   return (
     <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
@@ -70,28 +68,7 @@ export default async function DevotionalPage({ params }: PageProps) {
         priorityImage
       />
 
-      <div className="mt-14 md:mt-16 pt-10 border-t border-ivory-200 flex flex-col items-stretch sm:items-center gap-4 w-full">
-        <CopyButton
-          text={publicUrl}
-          label="🔗 Link másolása Facebookhoz"
-          successLabel="Link másolva!"
-          className="w-full sm:w-auto"
-        />
-        {facebookShort ? (
-          <CopyButton
-            text={facebookShort}
-            label="📋 Rövid Facebook-szöveg másolása"
-            successLabel="Rövid szöveg másolva!"
-            className="w-full sm:w-auto text-sm"
-          />
-        ) : null}
-        <CopyButton
-          text={facebookText}
-          label="📋 Teljes szöveg másolása"
-          successLabel="Szöveg másolva!"
-          className="w-full sm:w-auto text-xs"
-        />
-      </div>
+      <DevotionalShareButtons devotional={devotional} publicUrl={publicUrl} />
     </article>
   );
 }

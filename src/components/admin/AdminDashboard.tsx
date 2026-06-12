@@ -480,13 +480,7 @@ export function AdminDashboard({
   }
 
   const facebookText = preview
-    ? formatDevotionalForFacebook(
-        preview,
-        getPublicDevotionalUrl(
-          preview.dayNumber,
-          typeof window !== "undefined" ? window.location.origin : undefined
-        )
-      )
+    ? formatDevotionalForFacebook(preview, getPublicDevotionalUrl(preview.dayNumber))
     : "";
 
   const recentCategories = memory.usedCategories.slice(-5).join(" → ") || "—";
