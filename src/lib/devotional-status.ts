@@ -1,4 +1,3 @@
-import { isPublishableDevotionalContent } from "./devotional-text-complete";
 import type { Devotional, DevotionalStatus } from "./types";
 
 export const DEVOTIONAL_STATUSES: DevotionalStatus[] = [
@@ -57,15 +56,20 @@ export function normalizeDevotional(entry: Devotional): Devotional & {
   };
 }
 
-/** Nyilvános oldal: csak közzétett és teljes szövegű (nem félbeszakadt). */
+/**
+ * Nyilvános oldal: közzétett + van tartalom.
+ *
+ * Szándékosan UGYANAZ a szabály, mint a naptáré (filterCalendarDevotionals),
+ * hogy ne fordulhasson elő, hogy a naptárban kattintható egy nap, de a
+ * /devotional/[date] oldal 404-et ad. A félbeszakadt szöveg kiszűrése a
+ * generálási kapunál történik (ott needs_review lesz a státusz), nem itt
+ * a megjelenítéskor.
+ */
 export function isPublicDevotional(entry: Devotional): boolean {
   if (normalizeDevotionalStatus(entry.status) !== "published") {
     return false;
   }
-  if (!entry.content?.trim()) {
-    return false;
-  }
-  return isPublishableDevotionalContent(entry.content);
+  return Boolean(entry.content?.trim());
 }
 
 export function filterPublicDevotionals(devotionals: Devotional[]): Devotional[] {
