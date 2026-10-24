@@ -1,6 +1,9 @@
 import { Redis } from "@upstash/redis";
 import { promises as fs } from "fs";
-import { normalizeDevotional } from "../devotional-status";
+import {
+  normalizeDevotional,
+  normalizeDevotionalStatus,
+} from "../devotional-status";
 import type { Devotional } from "../types";
 import { getBundledDevotionalsForSeed } from "./bundled-seed";
 import {
@@ -10,12 +13,7 @@ import {
 } from "./devotional-validate";
 import { LOCAL_DEVOTIONALS_PATH } from "./local-json-storage";
 import { invalidatePublicDevotionalsCache } from "./cache-tags";
-import {
-  getRetentionCutoffDate,
-  getRetentionDays,
-  isRetentionAutoDeleteEnabled,
-  planRetention,
-} from "./retention";
+import { planRetention } from "./retention";
 import type { DevotionalStorage, GetLatestDevotionalsOptions } from "./types";
 
 /** Dátum index — score: dayNumber, member: YYYY-MM-DD */
@@ -129,31 +127,66 @@ async function writeDevotionalRecord(
   });
 }
 
+export interface RetentionRunResult {
+  referenceDate: string;
+  retentionDays: number;
+  cutoff: string | null;
+  /** Régebbi, de NEM törölhető (nem közzétett) rekordok dátumai */
+  keptUnpublished: string[];
+  /** Törlésre jelölt (régi + közzétett) dátumok */
+  removable: string[];
+  /** true, ha a törlés ténylegesen megtörtént */
+  deleted: boolean;
+}
+
 /**
- * Régi áhítatok törlése az áhítat DÁTUMA alapján (a jövőbeliek megmaradnak).
- * Csak a saját névterünket érinti: index + data kulcsok + a napi generálási
- * feladat kulcs. Csak DEVOTIONAL_RETENTION_AUTO_DELETE=true esetén fut.
+ * Napi ütemezett retention (cron). Alapból csak előnézet; törlés csak ha
+ * `apply` igaz. Csak a KÖZZÉTETT, cutoff-nál régebbi áhítatot törli az áhítat
+ * dátuma alapján — piszkozat / jóváhagyott / jövőbeli és a legfrissebb
+ * rekord megmarad. Csak saját névtér: index tag + data kulcs + generálási
+ * feladat kulcs.
  */
-async function applyRetention(redis: Redis): Promise<number> {
-  if (!isRetentionAutoDeleteEnabled()) return 0;
-  const cutoff = getRetentionCutoffDate();
-  if (!cutoff) return 0;
+export async function runDevotionalRetention(options: {
+  apply: boolean;
+}): Promise<RetentionRunResult> {
+  const redis = getRedisClient();
+  const plan = planRetention(
+    await redis.zrange<string[]>(REDIS_DEVOTIONAL_INDEX_KEY, 0, -1)
+  );
+  const result: RetentionRunResult = {
+    referenceDate: plan.referenceDate,
+    retentionDays: plan.retentionDays,
+    cutoff: plan.cutoff,
+    keptUnpublished: [],
+    removable: [],
+    deleted: false,
+  };
+  if (plan.remove.length === 0) return result;
 
-  const allDates = await redis.zrange<string[]>(REDIS_DEVOTIONAL_INDEX_KEY, 0, -1);
-  const toDelete = planRetention(allDates).remove;
+  const records = await redis.mget<unknown[]>(...plan.remove.map(dataKey));
+  plan.remove.forEach((date, i) => {
+    const parsed = parseStoredDevotional(records[i]);
+    // Hiányzó / nem olvasható rekordnál csak az árva index-tagot takarítjuk.
+    if (!parsed || normalizeDevotionalStatus(parsed.status) === "published") {
+      result.removable.push(date);
+    } else {
+      result.keptUnpublished.push(date);
+    }
+  });
 
-  if (toDelete.length === 0) return 0;
+  if (!options.apply || result.removable.length === 0) return result;
 
-  await redis.zrem(REDIS_DEVOTIONAL_INDEX_KEY, ...toDelete);
+  await redis.zrem(REDIS_DEVOTIONAL_INDEX_KEY, ...result.removable);
   await redis.del(
-    ...toDelete.map(dataKey),
-    ...toDelete.map((d) => `${REDIS_GENERATION_JOB_PREFIX}${d}`)
+    ...result.removable.map(dataKey),
+    ...result.removable.map((d) => `${REDIS_GENERATION_JOB_PREFIX}${d}`)
   );
-
+  invalidateSnapshot();
+  result.deleted = true;
   console.info(
-    `[redisStorage] Retention (${getRetentionDays()} nap): ${toDelete.length} régi áhítat törölve (cutoff: ${cutoff}).`
+    `[redisStorage] Retention (${plan.retentionDays} nap): ${result.removable.length} régi, közzétett áhítat törölve (cutoff: ${plan.cutoff}).`
   );
-  return toDelete.length;
+  return result;
 }
 
 async function migrateLegacyBlob(redis: Redis): Promise<void> {
@@ -195,7 +228,6 @@ async function seedFromBundledJson(redis: Redis): Promise<number> {
       }
     }
 
-    await applyRetention(redis);
     console.info(
       `[redisStorage] Seed: ${parsed.length} áhítat betöltve bundled JSON-ból.`
     );
@@ -315,6 +347,55 @@ export const redisStorage: DevotionalStorage = {
     }
   },
 
+  async getDevotionalsByDates(dates: string[]) {
+    if (dates.length === 0) return [];
+    // Nyilvános olvasás: egyetlen MGET, nincs index- vagy init-parancs.
+    return withRedisRetry("getDevotionalsByDates", async () => {
+      const redis = getRedisClient();
+      const records = await redis.mget<unknown[]>(...dates.map(dataKey));
+      const list: Devotional[] = [];
+      for (const raw of records) {
+        const parsed = parseStoredDevotional(raw);
+        if (parsed) list.push(parsed);
+      }
+      return list.sort((a, b) => b.dayNumber - a.dayNumber);
+    });
+  },
+
+  async getDevotionalsFromDate(minDate: string) {
+    return withRedisRetry("getDevotionalsFromDate", async () => {
+      const redis = getRedisClient();
+      await ensureRedisReady(redis);
+      const entries = await redis.zrange<(string | number)[]>(
+        REDIS_DEVOTIONAL_INDEX_KEY,
+        0,
+        -1,
+        { withScores: true }
+      );
+      let newestDate: string | null = null;
+      let newestScore = -Infinity;
+      const dates = new Set<string>();
+      for (let i = 0; i < entries.length; i += 2) {
+        const date = String(entries[i]);
+        const score = Number(entries[i + 1]);
+        if (score > newestScore) {
+          newestScore = score;
+          newestDate = date;
+        }
+        if (date >= minDate) dates.add(date);
+      }
+      if (newestDate) dates.add(newestDate);
+      if (dates.size === 0) return [];
+      const records = await redis.mget<unknown[]>(...[...dates].map(dataKey));
+      const list: Devotional[] = [];
+      for (const raw of records) {
+        const parsed = parseStoredDevotional(raw);
+        if (parsed) list.push(parsed);
+      }
+      return list.sort((a, b) => b.dayNumber - a.dayNumber);
+    });
+  },
+
   async saveDevotional(devotional: Devotional) {
     const redis = getRedisClient();
     await ensureRedisReady(redis);
@@ -333,7 +414,6 @@ export const redisStorage: DevotionalStorage = {
     }
 
     await writeDevotionalRecord(redis, normalized);
-    await applyRetention(redis);
     invalidateSnapshot();
     return normalized;
   },
@@ -360,8 +440,6 @@ export const redisStorage: DevotionalStorage = {
         member: date,
       });
     }
-
-    await applyRetention(redis);
     invalidateSnapshot();
     return normalized;
   },
@@ -390,7 +468,6 @@ export async function migrateLocalJsonToRedis(): Promise<number> {
   for (const d of sortDevotionals(parsed)) {
     await writeDevotionalRecord(redis, d);
   }
-  await applyRetention(redis);
   legacyMigrationDone = true;
   invalidateSnapshot();
   return parsed.length;

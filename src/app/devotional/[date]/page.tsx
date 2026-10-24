@@ -3,8 +3,6 @@ import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArtic
 import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
 import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
 import { resolveDevotionalView } from "@/lib/devotional-view";
-import { getDevotionalByDate } from "@/lib/devotionals";
-import { isPublicDevotional } from "@/lib/devotional-status";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
 import type { Metadata } from "next";
@@ -17,23 +15,23 @@ interface PageProps {
   params: Promise<{ date: string }>;
 }
 
+const NOT_AVAILABLE_METADATA: Metadata = {
+  title: "Az áhítat nem érhető el",
+  robots: { index: false },
+};
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { date } = await params;
   if (!DATE_RE.test(date)) {
     return { title: "Nem található" };
   }
 
-  let devotional;
-  try {
-    devotional = await getDevotionalByDate(date);
-  } catch (error) {
-    console.error("[devotional/[date]] generateMetadata", error);
-    return { title: "Áhítat" };
-  }
-  if (!devotional || !isPublicDevotional(devotional)) {
-    return { title: "Nem található" };
+  const result = await resolveDevotionalView(date);
+  if (result.kind !== "ok") {
+    return NOT_AVAILABLE_METADATA;
   }
 
+  const devotional = result.devotional;
   const displayImage = resolveDevotionalDisplayImage(devotional.imageUrl);
 
   return {
@@ -49,8 +47,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function DevotionalByDatePage({ params }: PageProps) {
   const { date } = await params;
-
-  console.log(`[devotional/[date]] route param date=${date}`);
 
   if (!DATE_RE.test(date)) {
     notFound();

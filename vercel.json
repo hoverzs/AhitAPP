@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/generate-devotional",
       "schedule": "5 0 * * *"
+    },
+    {
+      "path": "/api/cron/prune-devotionals",
+      "schedule": "0 3 * * *"
     }
   ]
 }

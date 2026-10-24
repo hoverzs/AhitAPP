@@ -10,7 +10,7 @@ const links = [
     label: "Mai nap",
     match: (p: string) => p.startsWith("/nap/") || p === "/mai",
   },
-  { href: "/#naptar", label: "Archívum", match: () => false },
+  { href: "/#elmult-napok", label: "Elmúlt napok", match: () => false },
 ] as const;
 
 interface SiteNavProps {

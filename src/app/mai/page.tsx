@@ -1,25 +1,24 @@
 import { redirect } from "next/navigation";
-import { logAppDateDebug } from "@/lib/app-date";
-import { getTodayDateIso } from "@/lib/devotional-calendar";
-import { getDevotionalByDate } from "@/lib/devotionals";
-import { isPublicDevotional } from "@/lib/devotional-status";
+import { getAppTodayIso } from "@/lib/app-date";
+import { lookupPublicDevotionalByDate } from "@/lib/devotionals";
 
 export const dynamic = "force-dynamic";
 
+/** A mai áhítatra irányít (ha már közzétették), különben a főoldalra. */
 export default async function MaiPage() {
-  const todayIso = getTodayDateIso();
-  logAppDateDebug("mai/page", { todayIso });
+  const todayIso = getAppTodayIso();
 
-  let devotional;
   try {
-    devotional = await getDevotionalByDate(todayIso);
+    const result = await lookupPublicDevotionalByDate(todayIso);
+    if (result.kind === "found") {
+      redirect(`/devotional/${todayIso}`);
+    }
   } catch (error) {
+    // redirect() NEXT_REDIRECT hibát dob — azt tovább kell engedni.
+    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
+    if ((error as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) throw error;
     console.error("[mai/page] storage error", error);
   }
 
-  if (devotional && isPublicDevotional(devotional)) {
-    redirect(`/devotional/${todayIso}`);
-  }
-
-  redirect("/#mai-ahitat");
+  redirect("/");
 }

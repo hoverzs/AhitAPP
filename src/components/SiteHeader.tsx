@@ -4,7 +4,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { HERO_IMAGE } from "@/lib/image-assets";
 import Link from "next/link";
-import { IconSearch, IconSun } from "@/components/icons";
+import { IconSun } from "@/components/icons";
 import { LogoBrand } from "@/components/Logo";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNavLink } from "@/components/AdminNavLink";
@@ -35,7 +35,6 @@ function HeroBackground() {
 }
 
 export function SiteHeader({ todayHref }: SiteHeaderProps) {
-  const currentYear = new Date().getFullYear();
   const pathname = usePathname();
   const isHome = pathname === "/";
   const isToday = pathname.startsWith("/nap/") || pathname === "/mai";
@@ -71,26 +70,6 @@ export function SiteHeader({ todayHref }: SiteHeaderProps) {
                   <AdminNavLink variant="glass" />
                   <button
                     type="button"
-                    className="h-10 w-10 rounded-xl border border-white/55 bg-white/50 text-ink hover:bg-white/70 backdrop-blur-sm flex items-center justify-center transition-all duration-300 shadow-sm"
-                    aria-label="Keresés (hamarosan)"
-                  >
-                    <IconSearch />
-                  </button>
-                  <label className="sr-only" htmlFor="year-select">
-                    Év
-                  </label>
-                  <select
-                    id="year-select"
-                    defaultValue={String(currentYear)}
-                    className="h-10 rounded-xl border border-white/55 bg-white/50 backdrop-blur-sm px-3 text-sm text-ink focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-400/30 shadow-sm"
-                    aria-label="Év kiválasztása"
-                  >
-                    <option value={String(currentYear - 1)}>{currentYear - 1}</option>
-                    <option value={String(currentYear)}>{currentYear}</option>
-                    <option value={String(currentYear + 1)}>{currentYear + 1}</option>
-                  </select>
-                  <button
-                    type="button"
                     className="h-10 w-10 rounded-xl border border-white/55 bg-white/50 text-gold-600 hover:bg-white/70 backdrop-blur-sm flex items-center justify-center transition-all duration-300 shadow-sm"
                     aria-label="Megjelenés (hamarosan)"
                   >
@@ -115,8 +94,8 @@ export function SiteHeader({ todayHref }: SiteHeaderProps) {
                 >
                   Mai nap
                 </Link>
-                <Link href="/#naptar" className="site-nav-link site-nav-link-mobile">
-                  Archívum
+                <Link href="/#elmult-napok" className="site-nav-link site-nav-link-mobile">
+                  Elmúlt napok
                 </Link>
                 <Link
                   href="/admin/login"

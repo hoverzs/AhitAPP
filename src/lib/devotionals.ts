@@ -1,5 +1,7 @@
 import { unstable_cache } from "next/cache";
-import { normalizeDevotional } from "./devotional-status";
+import { getAppTodayIso } from "./app-date";
+import { filterPublicDevotionals, normalizeDevotional } from "./devotional-status";
+import { getPublicWindowDates, isDateInPublicWindow } from "./public-window";
 import { PUBLIC_DEVOTIONALS_CACHE_TAG } from "./storage/cache-tags";
 import { isHeroImageUrl } from "./image-assets";
 import {
@@ -115,30 +117,43 @@ export async function getDevotionalByDay(
   return all.find((d) => d.dayNumber === dayNumber);
 }
 
-const PUBLIC_CACHE_REVALIDATE_SECONDS = 300;
+const PUBLIC_CACHE_REVALIDATE_SECONDS = 600;
 
-const cachedPublicList = unstable_cache(
-  async () => getDevotionalStorage().getLatestDevotionals(),
-  ["public-devotionals-list-v1"],
+/**
+ * A nyilvános 8 napos ablak (mai nap + előző 7 nap) a Next data cache-ből.
+ * Redis: egyetlen MGET 8 kulccsal. A cache kulcsa tartalmazza a mai dátumot
+ * (helyi, Europe/Bucharest nap), ezért napváltáskor automatikusan új bejegyzés
+ * készül; íráskor a címke érvényteleníti. Csak közzétett + tartalmas áhítat.
+ */
+const cachedPublicWindow = unstable_cache(
+  async (today: string) => {
+    const dates = getPublicWindowDates(today);
+    const records = await getDevotionalStorage().getDevotionalsByDates(dates);
+    return filterPublicDevotionals(records).sort(
+      (a, b) => devotionalDateKey(b).localeCompare(devotionalDateKey(a))
+    );
+  },
+  ["public-window-v2"],
   {
     revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS,
     tags: [PUBLIC_DEVOTIONALS_CACHE_TAG],
   }
 );
 
-/**
- * Nyilvános oldalak listája a Next data cache-ből (5 perc, írásnál
- * érvénytelenítve) — egy látogatás ne olvassa újra a teljes Redis-listát.
- * Az admin / generálás NEM ezt használja, ott mindig friss az olvasás.
- */
-export async function getPublicDevotionalsCached(): Promise<Devotional[]> {
+/** Nyilvános oldalak: a közzétett áhítatok az elmúlt 8 napból, újabb elöl. */
+export async function getPublicWindowDevotionals(): Promise<Devotional[]> {
+  const today = getAppTodayIso();
   try {
-    return await cachedPublicList();
+    return await cachedPublicWindow(today);
   } catch (error) {
     // Next futtatókörnyezeten kívül (tsx script) nincs data cache.
     if (error instanceof Error && /incrementalCache/i.test(error.message)) {
-      return getDevotionalStorage().getLatestDevotionals();
+      const records = await getDevotionalStorage().getDevotionalsByDates(
+        getPublicWindowDates(today)
+      );
+      return filterPublicDevotionals(records);
     }
+    if (isProductionStorageNotConfiguredError(error)) return [];
     throw error;
   }
 }
@@ -146,36 +161,52 @@ export async function getPublicDevotionalsCached(): Promise<Devotional[]> {
 export async function getPublicDevotionalByDay(
   dayNumber: number
 ): Promise<Devotional | undefined> {
-  try {
-    const all = await getPublicDevotionalsCached();
-    return all.find((d) => d.dayNumber === dayNumber);
-  } catch (error) {
-    if (isProductionStorageNotConfiguredError(error)) return undefined;
-    throw error;
-  }
+  const window = await getPublicWindowDevotionals();
+  return window.find((d) => d.dayNumber === dayNumber);
+}
+
+export type PublicDevotionalLookup =
+  | { kind: "found"; devotional: Devotional }
+  | { kind: "expired" }
+  | { kind: "missing" };
+
+/**
+ * Dátum szerinti nyilvános keresés. Az ablakon kívüli dátum lejárt" (nem
+ * kérdezünk le semmit Redisből), az ablakon belüli, de nem közzétett vagy
+ * hiányzó dátum missing".
+ */
+export async function lookupPublicDevotionalByDate(
+  date: string
+): Promise<PublicDevotionalLookup> {
+  if (date > getAppTodayIso()) return { kind: "missing" };
+  if (!isDateInPublicWindow(date)) return { kind: "expired" };
+  const window = await getPublicWindowDevotionals();
+  const devotional = window.find((d) => devotionalDateKey(d) === date);
+  return devotional ? { kind: "found", devotional } : { kind: "missing" };
 }
 
 /**
- * Nyilvános oldal: dátum szerinti keresés ugyanabból a (cache-elt) listából,
- * amelyből a naptár is épül, devotionalDateKey() szerint — így naptárban aktív
- * nap nem adhat 404-et, és nincs külön Redis-parancs oldalmegjelenítésenként.
+ * Admin munkakészlet: mai nap, jövőbeli és az elmúlt 7 nap rekordjai (+ a
+ * legnagyobb napszámú rekord)  nem a teljes tár. Piszkozatokkal együtt.
  */
-export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
+export async function readAdminWorkingSet(): Promise<ReadDevotionalsResult> {
+  const driver = resolveStorageDriver();
   try {
-    const all = await getPublicDevotionalsCached();
-    const matched = all.find((d) => devotionalDateKey(d) === date);
-    if (!matched) {
-      console.warn(`[getDevotionalByDate] no record for date=${date}`);
-    }
-    return matched;
+    const minDate = getPublicWindowDates().at(-1)!;
+    const devotionals = await getDevotionalStorage().getDevotionalsFromDate(minDate);
+    return { devotionals, storageError: null, storageHint: null, driver };
   } catch (error) {
     if (isProductionStorageNotConfiguredError(error)) {
-      return undefined;
+      return {
+        devotionals: [],
+        storageError: STORAGE_NOT_CONFIGURED_HU,
+        storageHint: STORAGE_NOT_CONFIGURED_HINT,
+        driver,
+      };
     }
     throw error;
   }
 }
-
 export async function appendDevotional(entry: Devotional): Promise<Devotional> {
   const storage = getDevotionalStorage();
   return storage.saveDevotional(normalizeDevotional(entry));

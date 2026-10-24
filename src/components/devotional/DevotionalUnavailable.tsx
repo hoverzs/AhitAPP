@@ -1,23 +1,18 @@
 import Link from "next/link";
 
-export type DevotionalUnavailableReason =
-  | "missing"
-  | "unpublished"
-  | "incomplete"
-  | "error";
+export type DevotionalUnavailableReason = "missing" | "expired" | "error";
 
 const TITLES: Record<DevotionalUnavailableReason, string> = {
-  error: "Az áhítat átmenetileg nem érhető el",
+  expired: "Ez az áhítat már nem érhető el",
   missing: "Erre a napra még nincs áhítat",
-  unpublished: "Az áhítat még nincs publikálva",
-  incomplete: "Az áhítat hiányos",
+  error: "Az áhítat átmenetileg nem érhető el",
 };
 
 const MESSAGES: Record<DevotionalUnavailableReason, string> = {
+  expired:
+    "Az áhítatok csak 8 napig olvashatók: a mai napén és az előző hét napén. A keresett áhítat ennél régebbi, ezért már lejárt.",
+  missing: "Erre a napra nincs közzétett áhítat.",
   error: "Nem sikerült betölteni az áhítatot. Kérlek próbáld újra pár perc múlva.",
-  missing: "Erre a napra még nincs áhítat generálva.",
-  unpublished: "Ez az áhítat még nincs publikálva.",
-  incomplete: "Ez az áhítat hiányosan lett elmentve. Kérlek generáld újra.",
 };
 
 interface DevotionalUnavailableProps {
@@ -33,7 +28,7 @@ export function DevotionalUnavailable({ reason }: DevotionalUnavailableProps) {
         href="/"
         className="inline-block mt-8 text-gold-600 font-medium hover:underline"
       >
-        ← Vissza az archívumhoz
+        ← Ugrás a mai áhítathoz
       </Link>
     </div>
   );

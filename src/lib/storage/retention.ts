@@ -1,12 +1,13 @@
 import { addDaysToIsoDate, getAppTodayIso } from "../app-date";
 
-export const DEFAULT_RETENTION_DAYS = 60;
+/** A mai nap + az előző 7 nap marad meg (összesen 8 nap). */
+export const DEFAULT_RETENTION_DAYS = 7;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Hány napnyi áhítat maradjon meg (az áhítat DÁTUMA alapján).
- * Alapértelmezés: 60. DEVOTIONAL_RETENTION_DAYS=0 → nincs korlát.
+ * Alapértelmezés: 7 (mai nap + előző 7 nap). DEVOTIONAL_RETENTION_DAYS=0 → nincs korlát.
  */
 export function getRetentionDays(): number {
   const raw = process.env.DEVOTIONAL_RETENTION_DAYS?.trim();
@@ -19,8 +20,8 @@ export function getRetentionDays(): number {
 
 /**
  * Az automatikus törlés csak kifejezett engedélyezéssel fut
- * (DEVOTIONAL_RETENTION_AUTO_DELETE=true). Enélkül a retention csak
- * előnézetként használható (npm run retention:preview), éles adat nem törlődik.
+ * (DEVOTIONAL_RETENTION_AUTO_DELETE=true). Enélkül a napi cron csak előnézetet
+ * ad (és npm run retention:preview), éles adat nem törlődik.
  */
 export function isRetentionAutoDeleteEnabled(): boolean {
   return process.env.DEVOTIONAL_RETENTION_AUTO_DELETE?.trim().toLowerCase() === "true";

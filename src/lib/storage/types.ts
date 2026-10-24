@@ -8,6 +8,13 @@ export interface GetLatestDevotionalsOptions {
 export interface DevotionalStorage {
   getLatestDevotionals(options?: GetLatestDevotionalsOptions): Promise<Devotional[]>;
   getDevotionalByDate(date: string): Promise<Devotional | undefined>;
+  /** Pontosan a megadott dátumok rekordjai (Redis: egyetlen MGET, index nélkül). */
+  getDevotionalsByDates(dates: string[]): Promise<Devotional[]>;
+  /**
+   * Admin munkakészlet: a minDate-nél nem régebbi (vagy jövőbeli) rekordok
+   * + a legnagyobb napszámú rekord (a napszámozáshoz).
+   */
+  getDevotionalsFromDate(minDate: string): Promise<Devotional[]>;
   saveDevotional(devotional: Devotional): Promise<Devotional>;
   updateDevotional(date: string, devotional: Devotional): Promise<Devotional>;
   deleteDevotional(date: string): Promise<void>;

@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
 import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
 import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
-import { normalizeDevotionalStatus } from "@/lib/devotional-status";
 import type { Metadata } from "next";
-import { getPublicDevotionalByDay } from "@/lib/devotionals";
+import { getPublicWindowDevotionals } from "@/lib/devotionals";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
+import type { Devotional } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -14,21 +14,43 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+type DayLookup =
+  | { kind: "ok"; devotional: Devotional }
+  | { kind: "expired" }
+  | { kind: "missing" }
+  | { kind: "error" };
+
+/**
+ * Napszám szerinti keresés a nyilvános 8 napos ablakban (ugyanaz a cache-elt
+ * lista, mint a főoldalé). A Facebook-linkek /nap/<napszám> alakúak, ezért az
+ * ablakból kiesett napszám „lejárt"; a legújabbnál nagyobb „még nincs".
+ */
+async function lookupByDay(dayNumber: number): Promise<DayLookup> {
+  try {
+    const window = await getPublicWindowDevotionals();
+    const found = window.find((d) => d.dayNumber === dayNumber);
+    if (found) return { kind: "ok", devotional: found };
+    const newest = window[0]?.dayNumber ?? 0;
+    return { kind: dayNumber > newest ? "missing" : "expired" };
+  } catch (error) {
+    console.error(`[nap/[id]] dayNumber=${dayNumber} → STORAGE ERROR`, error);
+    return { kind: "error" };
+  }
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const dayNumber = Number(id);
-  let devotional;
-  try {
-    devotional = await getPublicDevotionalByDay(dayNumber);
-  } catch (error) {
-    console.error("[nap/[id]] generateMetadata", error);
-    return { title: "Áhítat" };
-  }
-
-  if (!devotional) {
+  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
     return { title: "Nem található" };
   }
 
+  const result = await lookupByDay(dayNumber);
+  if (result.kind !== "ok") {
+    return { title: "Az áhítat nem érhető el", robots: { index: false } };
+  }
+
+  const devotional = result.devotional;
   const displayImage = resolveDevotionalDisplayImage(devotional.imageUrl);
 
   return {
@@ -46,56 +68,21 @@ export default async function DevotionalPage({ params }: PageProps) {
   const { id } = await params;
   const dayNumber = Number(id);
 
-  console.log(`[nap/[id]] route param id=${id} dayNumber=${dayNumber}`);
-
   if (!Number.isFinite(dayNumber) || dayNumber < 1) {
     notFound();
   }
 
-  let devotional;
-  try {
-    devotional = await getPublicDevotionalByDay(dayNumber);
-  } catch (error) {
-    console.error(`[nap/[id]] dayNumber=${dayNumber} → STORAGE ERROR`, error);
+  const result = await lookupByDay(dayNumber);
+
+  if (result.kind !== "ok") {
     return (
       <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-        <DevotionalUnavailable reason="error" />
+        <DevotionalUnavailable reason={result.kind} />
       </article>
     );
   }
 
-  if (!devotional) {
-    console.warn(`[nap/[id]] dayNumber=${dayNumber} → MISSING (nincs rekord)`);
-    return (
-      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-        <DevotionalUnavailable reason="missing" />
-      </article>
-    );
-  }
-
-  const status = normalizeDevotionalStatus(devotional.status);
-  const hasContent = Boolean(devotional.content?.trim());
-
-  console.log(
-    `[nap/[id]] dayNumber=${dayNumber} status=${status} hasContent=${hasContent} recordDate=${devotional.date ?? "(nincs)"}`
-  );
-
-  if (status !== "published") {
-    return (
-      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-        <DevotionalUnavailable reason="unpublished" />
-      </article>
-    );
-  }
-
-  if (!hasContent) {
-    return (
-      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-        <DevotionalUnavailable reason="incomplete" />
-      </article>
-    );
-  }
-
+  const devotional = result.devotional;
   const publicUrl = getPublicDevotionalUrl(dayNumber);
 
   return (

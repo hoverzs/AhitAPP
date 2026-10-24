@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { loadAdminPageData } from "@/lib/app-data";
+import { getAppTodayIso } from "@/lib/app-date";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export default async function AdminPage() {
 
   return (
     <AdminDashboard
+      todayIso={getAppTodayIso()}
       memory={memory}
       latestDevotional={reviewDevotional}
       adminContext={adminContext}

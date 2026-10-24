@@ -9,7 +9,7 @@ export default function NotFound() {
         href="/"
         className="inline-block mt-8 text-gold-600 font-medium hover:underline"
       >
-        ← Vissza az archívumhoz
+        ← Ugrás a mai áhítathoz
       </Link>
     </div>
   );

@@ -6,9 +6,14 @@ import { STATIC_EXCERPT } from "@/lib/fallbacks";
 
 interface FeaturedTodayDevotionalProps {
   devotional: Devotional | null;
+  /** Mai nap (YYYY-MM-DD); ha a megjelenített áhítat régebbi, „Legutóbbi áhítat" a felirat. */
+  todayIso?: string;
 }
 
-export function FeaturedTodayDevotional({ devotional }: FeaturedTodayDevotionalProps) {
+export function FeaturedTodayDevotional({
+  devotional,
+  todayIso,
+}: FeaturedTodayDevotionalProps) {
   if (!devotional) {
     return (
       <article className="editorial-feature">
@@ -27,13 +32,15 @@ export function FeaturedTodayDevotional({ devotional }: FeaturedTodayDevotionalP
   }
 
   const dateLabel = formatDevotionalDate(devotional.date ?? devotional.createdAt);
+  const isToday = !todayIso || devotional.date === todayIso;
+  const eyebrow = isToday ? "Mai áhítat" : "Legutóbbi áhítat";
 
   return (
     <article className="editorial-feature" id="mai-ahitat">
       <div className="editorial-feature-inner editorial-feature-inner--article max-w-[840px]">
         <header className="text-center mb-8 md:mb-10">
           <p className="editorial-eyebrow">
-            Mai áhítat
+            {eyebrow}
             {dateLabel && (
               <>
                 <span className="mx-2 text-gold-500/40" aria-hidden>

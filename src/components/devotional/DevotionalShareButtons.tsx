@@ -4,6 +4,7 @@ import {
   formatDevotionalShortForFacebook,
   formatDevotionalForWebsiteEmbed,
 } from "@/lib/facebook";
+import { getDevotionalExpiryDate } from "@/lib/public-window";
 import type { Devotional } from "@/lib/types";
 
 interface DevotionalShareButtonsProps {
@@ -21,9 +22,16 @@ export function DevotionalShareButtons({
     ? formatDevotionalShortForFacebook(devotional.facebookCopy, publicUrl)
     : null;
   const websiteEmbed = formatDevotionalForWebsiteEmbed(devotional, publicUrl);
+  const expiry = devotional.date ? getDevotionalExpiryDate(devotional.date) : null;
 
   return (
     <div className="mt-14 md:mt-16 pt-10 border-t border-ivory-200 flex flex-col items-stretch sm:items-center gap-4 w-full">
+      {expiry ? (
+        <p className="text-xs text-ink-muted text-center leading-relaxed">
+          A megosztott link {expiry}-ig működik, utána „Ez az áhítat már nem érhető el”
+          oldalt mutat.
+        </p>
+      ) : null}
       <CopyButton
         text={publicUrl}
         label="🔗 Link másolása Facebookhoz"

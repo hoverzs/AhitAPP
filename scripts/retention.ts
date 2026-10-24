@@ -1,26 +1,30 @@
 /**
- * 60 napnál régebbi áhítatok előnézete / törlése (az áhítat DÁTUMA alapján).
+ * Régi (7 napnál régebbi) KÖZZÉTETT áhítatok előnézete / törlése — az áhítat
+ * DÁTUMA alapján (Europe/Bucharest nap). Piszkozat, jóváhagyott, jövőbeli és
+ * a legfrissebb rekord soha nem törlődik. Ugyanazt a logikát használja, mint a
+ * napi cron (/api/cron/prune-devotionals).
  *
- *   npm run retention:preview                    # csak olvas, SEMMIT nem töröl
- *   npm run retention:preview -- --source=local  # data/devotionals.json alapján (Redis nélkül)
- *   npm run retention:preview -- --env-file=.env.production.local
- *   npm run retention:apply -- --confirm=DELETE-<darabszám>   # tényleges törlés
+ *   npx tsx scripts/retention.ts                    # előnézet, SEMMIT nem töröl
+ *   npx tsx scripts/retention.ts --source=local     # data/devotionals.json alapján (Redis nélkül)
+ *   npx tsx scripts/retention.ts --env-file=.env.production.local
+ *   npx tsx scripts/retention.ts --apply --confirm=DELETE-<darabszám>
  *
- * Redis env: KV_REST_API_URL + KV_REST_API_TOKEN (vagy UPSTASH_REDIS_REST_*).
- * A törlés előtt a rekordokról JSON mentés készül a backups/ mappába.
- * Csak ezeket a kulcsokat érinti: ahitapp:devotional:index (tagok),
- * ahitapp:devotional:data:<dátum>, ahitapp:generation:job:<dátum>.
+ * (npm run retention:preview / retention:apply ugyanezt hívja; npm alatt a
+ *  kapcsolókat `--` után add meg.)
+ *
+ * Törlés előtt JSON mentés készül a backups/ mappába. Csak saját kulcsokat érint:
+ * ahitapp:devotional:index (tagok), ahitapp:devotional:data:<dátum>,
+ * ahitapp:generation:job:<dátum>.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { Redis } from "@upstash/redis";
 import { getAppTodayIso } from "../src/lib/app-date";
+import { normalizeDevotionalStatus } from "../src/lib/devotional-status";
+import { runDevotionalRetention } from "../src/lib/storage/redis-storage";
 import { planRetention } from "../src/lib/storage/retention";
 
-const INDEX_KEY = "ahitapp:devotional:index";
 const DATA_PREFIX = "ahitapp:devotional:data:";
-const JOB_PREFIX = "ahitapp:generation:job:";
-const CHUNK = 50;
 
 function arg(name: string): string | undefined {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -36,20 +40,31 @@ function loadEnv() {
   }
 }
 
-function printPlan(plan: ReturnType<typeof planRetention>, total: number, source: string) {
-  console.log(`Forrás:            ${source}`);
-  console.log(`Mai dátum:         ${plan.referenceDate} (Europe/Bucharest)`);
+interface Summary {
+  referenceDate: string;
+  retentionDays: number;
+  cutoff: string | null;
+  removable: string[];
+  keptUnpublished: string[];
+}
+
+function print(summary: Summary, total: number, source: string) {
+  console.log(`Forrás:               ${source}`);
+  console.log(`Mai dátum:            ${summary.referenceDate} (Europe/Bucharest)`);
   console.log(
-    `Megőrzés:          ${plan.retentionDays} nap` +
-      (plan.cutoff ? ` → legkorábbi megmaradó dátum: ${plan.cutoff}` : " (kikapcsolva)")
+    `Megőrzés:             ${summary.retentionDays} nap` +
+      (summary.cutoff ? ` → legkorábbi megmaradó dátum: ${summary.cutoff}` : " (kikapcsolva)")
   );
-  console.log(`Összes áhítat:     ${total}`);
-  console.log(`Megmarad:          ${plan.keep.length} (ebből jövőbeli: ${plan.future.length})`);
-  console.log(`TÖRLÉSRE JELÖLT:   ${plan.remove.length}`);
-  if (plan.remove.length) {
-    console.log(`  legrégebbi:      ${plan.remove[0]}`);
-    console.log(`  legújabb:        ${plan.remove[plan.remove.length - 1]}`);
-    console.log(`  dátumok:         ${plan.remove.join(", ")}`);
+  console.log(`Vizsgált rekord:      ${total}`);
+  console.log(`TÖRLÉSRE JELÖLT:      ${summary.removable.length}  (régi + közzétett)`);
+  if (summary.removable.length) {
+    console.log(`  legrégebbi:         ${summary.removable[0]}`);
+    console.log(`  legújabb:           ${summary.removable[summary.removable.length - 1]}`);
+    console.log(`  dátumok:            ${summary.removable.join(", ")}`);
+  }
+  console.log(`Régi, de MEGMARAD (nem közzétett): ${summary.keptUnpublished.length}`);
+  if (summary.keptUnpublished.length) {
+    console.log(`  dátumok:            ${summary.keptUnpublished.join(", ")}`);
   }
 }
 
@@ -62,9 +77,25 @@ async function main() {
     const raw = JSON.parse(readFileSync(path.join("data", "devotionals.json"), "utf-8")) as {
       date?: string;
       createdAt: string;
+      status?: string;
     }[];
-    const dates = raw.map((d) => d.date ?? d.createdAt.slice(0, 10));
-    printPlan(planRetention(dates, getAppTodayIso()), dates.length, "data/devotionals.json");
+    const rows = raw.map((d) => ({
+      date: d.date ?? d.createdAt.slice(0, 10),
+      published: normalizeDevotionalStatus(d.status as never) === "published",
+    }));
+    const plan = planRetention(rows.map((r) => r.date), getAppTodayIso());
+    const published = new Set(rows.filter((r) => r.published).map((r) => r.date));
+    print(
+      {
+        referenceDate: plan.referenceDate,
+        retentionDays: plan.retentionDays,
+        cutoff: plan.cutoff,
+        removable: plan.remove.filter((d) => published.has(d)),
+        keptUnpublished: plan.remove.filter((d) => !published.has(d)),
+      },
+      rows.length,
+      "data/devotionals.json"
+    );
     console.log("\nLokális előnézet — nem töröl semmit.");
     return;
   }
@@ -75,51 +106,46 @@ async function main() {
     console.error("Redis nincs konfigurálva (KV_REST_API_URL / KV_REST_API_TOKEN). Használd: --env-file=... vagy --source=local");
     process.exit(1);
   }
-  const redis = new Redis({ url, token });
 
-  let dates: string[];
+  let preview;
   try {
-    dates = await redis.zrange<string[]>(INDEX_KEY, 0, -1); // 1 parancs
+    preview = await runDevotionalRetention({ apply: false });
   } catch (error) {
     console.error("A Redis jelenleg nem fogad parancsokat:", error instanceof Error ? error.message : error);
     console.error("Oldd fel az Upstash korlátot (Console → Database → Usage/Details), majd futtasd újra.");
     process.exit(2);
   }
-
-  const plan = planRetention(dates, getAppTodayIso());
-  printPlan(plan, dates.length, "Upstash Redis (index)");
+  print(preview, preview.removable.length + preview.keptUnpublished.length, "Upstash Redis");
 
   if (!apply) {
-    console.log("\nELŐNÉZET — nem törölt semmit. Törléshez: npm run retention:apply -- --confirm=DELETE-" + plan.remove.length);
+    console.log(
+      `\nELŐNÉZET — nem törölt semmit. Törléshez: npx tsx scripts/retention.ts --apply --confirm=DELETE-${preview.removable.length}`
+    );
     return;
   }
-
-  if (plan.remove.length === 0) {
+  if (preview.removable.length === 0) {
     console.log("\nNincs törlendő áhítat.");
     return;
   }
-  if (arg("confirm") !== `DELETE-${plan.remove.length}`) {
-    console.error(`\nMegerősítés hiányzik/eltér. Add meg: --confirm=DELETE-${plan.remove.length}`);
+  if (arg("confirm") !== `DELETE-${preview.removable.length}`) {
+    console.error(`\nMegerősítés hiányzik/eltér. Add meg: --confirm=DELETE-${preview.removable.length}`);
     process.exit(1);
   }
 
   // Mentés törlés előtt
+  const redis = new Redis({ url, token });
   const records: unknown[] = [];
-  for (let i = 0; i < plan.remove.length; i += CHUNK) {
-    const part = plan.remove.slice(i, i + CHUNK);
+  for (let i = 0; i < preview.removable.length; i += 50) {
+    const part = preview.removable.slice(i, i + 50);
     records.push(...(await redis.mget<unknown[]>(...part.map((d) => DATA_PREFIX + d))));
   }
   mkdirSync("backups", { recursive: true });
-  const backupFile = path.join("backups", `retention-${plan.referenceDate}-${Date.now()}.json`);
-  writeFileSync(backupFile, JSON.stringify({ dates: plan.remove, records }, null, 2), "utf-8");
+  const backupFile = path.join("backups", `retention-${preview.referenceDate}-${Date.now()}.json`);
+  writeFileSync(backupFile, JSON.stringify({ dates: preview.removable, records }, null, 2), "utf-8");
   console.log(`\nMentés kész: ${backupFile}`);
 
-  for (let i = 0; i < plan.remove.length; i += CHUNK) {
-    const part = plan.remove.slice(i, i + CHUNK);
-    await redis.zrem(INDEX_KEY, ...part);
-    await redis.del(...part.map((d) => DATA_PREFIX + d), ...part.map((d) => JOB_PREFIX + d));
-  }
-  console.log(`Törölve: ${plan.remove.length} áhítat (index + adat + generálási feladat kulcsok).`);
+  const done = await runDevotionalRetention({ apply: true });
+  console.log(`Törölve: ${done.deleted ? done.removable.length : 0} áhítat (index + adat + generálási feladat kulcsok).`);
 }
 
 main().catch((err) => {

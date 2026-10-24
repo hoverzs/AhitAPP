@@ -17,11 +17,16 @@ export {
   getRedisRestCredentials,
   isRedisStorageConfigured,
   migrateLocalJsonToRedis,
+  runDevotionalRetention,
   REDIS_DEVOTIONAL_DATA_PREFIX,
   REDIS_DEVOTIONAL_INDEX_KEY,
   REDIS_DEVOTIONALS_LEGACY_KEY,
 } from "./redis-storage";
-export { getRetentionCutoffDate, getRetentionDays } from "./retention";
+export {
+  getRetentionCutoffDate,
+  getRetentionDays,
+  isRetentionAutoDeleteEnabled,
+} from "./retention";
 export { storageErrorResponse, withStorageErrorFallback } from "./api-error";
 
 export function resolveStorageDriver(): StorageDriver {

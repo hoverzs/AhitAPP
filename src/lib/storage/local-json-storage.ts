@@ -56,6 +56,20 @@ export const localJsonStorage: DevotionalStorage = {
     return all.find((d) => devotionalDateKey(d) === date);
   },
 
+  async getDevotionalsByDates(dates: string[]) {
+    const wanted = new Set(dates);
+    const all = await readRawFromFile();
+    return all.filter((d) => wanted.has(devotionalDateKey(d)));
+  },
+
+  async getDevotionalsFromDate(minDate: string) {
+    const all = await readRawFromFile();
+    const newest = [...all].sort((a, b) => b.dayNumber - a.dayNumber)[0];
+    return latestFirst(
+      all.filter((d) => devotionalDateKey(d) >= minDate || d === newest)
+    );
+  },
+
   async saveDevotional(devotional: Devotional) {
     const normalized = normalizeDevotional(devotional);
     const all = await readRawFromFile();

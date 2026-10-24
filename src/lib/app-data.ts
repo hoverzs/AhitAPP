@@ -1,15 +1,10 @@
-import {
-  getPublicDevotionalsCached,
-  readDevotionalsWithStatus,
-} from "./devotionals";
-import { isProductionStorageNotConfiguredError } from "./storage";
+import { getPublicWindowDevotionals, readAdminWorkingSet } from "./devotionals";
+import { devotionalDateKey } from "./storage";
+import { getPublicWindowDates } from "./public-window";
 import { buildDevotionalMemory } from "./devotional-memory";
 import {
-  filterCalendarDevotionals,
-  filterPublicDevotionals,
   isPendingReview,
   normalizeDevotional,
-  normalizeDevotionalStatus,
   statusLabelHu,
 } from "./devotional-status";
 import {
@@ -29,82 +24,61 @@ import {
   getExternalRetryCronUrl,
 } from "./cron-retry-config";
 import { GEMINI_PLANNER_MODEL } from "./config";
-import { getLatestDevotional, getRecentDevotionals } from "./dashboard";
-import { resolveDisplayVerse, type DisplayVerse } from "./display-verse";
-import { STATIC_DISPLAY_VERSE } from "./fallbacks";
+import { getLatestDevotional } from "./dashboard";
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import type { AdminDevotionalContext, AdminDevotionalListItem, Devotional } from "./types";
 import type { DevotionalMemory } from "./devotional-memory";
 
+export interface PublicDay {
+  date: string;
+  /** Közzétett áhítat erre a napra, vagy null (még nincs / nincs közzétéve). */
+  devotional: Devotional | null;
+}
+
 export interface HomePageData {
+  todayIso: string;
+  /** Közzétett áhítatok az elmúlt 8 napból, újabb elöl. */
   devotionals: Devotional[];
-  /** Naptár — published + tartalom (lazább szűrés, mint a főoldali featured). */
-  calendarDevotionals: Devotional[];
+  /** A főoldali (fő) áhítat: a mai, vagy ha még nincs, a legutóbbi. */
   latest: Devotional | null;
-  displayVerse: DisplayVerse;
-  featuredVerse: DisplayVerse;
-  recent: Devotional[];
+  /** A nyolcnapos dátumválasztó napjai, a mai elöl. */
+  days: PublicDay[];
 }
 
-const EMPTY_HOME: HomePageData = {
-  devotionals: [],
-  calendarDevotionals: [],
-  latest: null,
-  displayVerse: { ...STATIC_DISPLAY_VERSE },
-  featuredVerse: { ...STATIC_DISPLAY_VERSE },
-  recent: [],
+function buildPublicDays(todayIso: string, devotionals: Devotional[]): PublicDay[] {
+  const byDate = new Map(devotionals.map((d) => [devotionalDateKey(d), d]));
+  return getPublicWindowDates(todayIso).map((date) => ({
+    date,
+    devotional: byDate.get(date) ?? null,
+  }));
+}
+
+const EMPTY_HOME = (): HomePageData => {
+  const todayIso = getAppTodayIso();
+  return {
+    todayIso,
+    devotionals: [],
+    latest: null,
+    days: buildPublicDays(todayIso, []),
+  };
 };
-
-/** Nyilvános oldalak: cache-elt lista; nem konfigurált tárolónál üres. */
-async function readPublicList(): Promise<Devotional[]> {
-  try {
-    return await getPublicDevotionalsCached();
-  } catch (error) {
-    if (isProductionStorageNotConfiguredError(error)) return [];
-    throw error;
-  }
-}
 
 export async function loadHomePageData(): Promise<HomePageData> {
   try {
-    const all = await readPublicList();
-    const devotionals = filterPublicDevotionals(all);
-    const calendarDevotionals = filterCalendarDevotionals(all);
-    const latest = getLatestDevotional(devotionals);
-    const recent = getRecentDevotionals(devotionals, 3);
-
-    console.log(
-      `[loadHomePageData] featured latest → ` +
-        `date=${latest?.date ?? "(nincs)"} dayNumber=${latest?.dayNumber ?? "(nincs)"} ` +
-        `status=${latest ? normalizeDevotionalStatus(latest.status) : "(nincs)"} | ` +
-        `calendarDays=${calendarDevotionals.length} publicDays=${devotionals.length}`
-    );
-
-    const displayVerse = resolveDisplayVerse(
-      devotionals,
-      latest?.dayNumber ?? 1
-    );
-
-    const featuredSource =
-      devotionals.find((d) => d.dayNumber === 2) ??
-      devotionals.find((d) => d.dayNumber === 1) ??
-      latest;
-
-    const featuredVerse = featuredSource
-      ? resolveDisplayVerse(devotionals, featuredSource.dayNumber)
-      : displayVerse;
+    const todayIso = getAppTodayIso();
+    const devotionals = await getPublicWindowDevotionals();
+    // A lista dátum szerint csökkenő: az első a mai, ha van, különben a legutóbbi.
+    const latest = devotionals[0] ?? null;
 
     return {
+      todayIso,
       devotionals,
-      calendarDevotionals,
       latest,
-      displayVerse,
-      featuredVerse,
-      recent,
+      days: buildPublicDays(todayIso, devotionals),
     };
   } catch (error) {
     console.error("[loadHomePageData]", error);
-    return EMPTY_HOME;
+    return EMPTY_HOME();
   }
 }
 
@@ -113,18 +87,16 @@ export async function loadSiteNavData(): Promise<{
   publishedCount: number;
 }> {
   try {
-    const published = await readPublicList();
-    const devotionals = filterPublicDevotionals(published);
-    const latest = getLatestDevotional(devotionals);
+    const devotionals = await getPublicWindowDevotionals();
+    const latest = devotionals[0];
     return {
-      todayHref: latest ? `/nap/${latest.dayNumber}` : "/admin",
+      todayHref: latest ? `/nap/${latest.dayNumber}` : "/",
       publishedCount: devotionals.length,
     };
   } catch {
-    return { todayHref: "/admin", publishedCount: 0 };
+    return { todayHref: "/", publishedCount: 0 };
   }
 }
-
 export async function buildAdminDevotionalContext(
   devotionals: Devotional[]
 ): Promise<AdminDevotionalContext> {
@@ -210,11 +182,19 @@ export async function loadAdminPageData(): Promise<{
   storageError: string | null;
   storageHint: string | null;
 }> {
-  const {
-    devotionals: raw,
-    storageError,
-    storageHint,
-  } = await readDevotionalsWithStatus();
+  let working: Awaited<ReturnType<typeof readAdminWorkingSet>>;
+  try {
+    working = await readAdminWorkingSet();
+  } catch (error) {
+    console.error("[loadAdminPageData]", error);
+    working = {
+      devotionals: [],
+      storageError: "Nem sikerült betölteni az áhítatokat.",
+      storageHint: error instanceof Error ? error.message : null,
+      driver: "redis",
+    };
+  }
+  const { devotionals: raw, storageError, storageHint } = working;
 
   if (storageError) {
     const emptyCtx = await buildAdminDevotionalContext([]);
@@ -233,7 +213,11 @@ export async function loadAdminPageData(): Promise<{
   try {
     const devotionals = raw.map(normalizeDevotional);
 
+    // Az admin elsőként a mai áhítatot mutatja; ha még nincs, a függőben lévőt
+    // (piszkozat / ellenőrzésre vár), végül a legutóbbit.
+    const todayIso = getAppTodayIso();
     const reviewDevotional =
+      devotionals.find((d) => d.date === todayIso) ??
       devotionals.find((d) => isPendingReview(d.status)) ??
       getLatestDevotional(devotionals);
 

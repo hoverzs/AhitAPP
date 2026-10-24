@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { readDevotionals } from "@/lib/devotionals";
+import { readAdminWorkingSet } from "@/lib/devotionals";
 import { toAdminListItems } from "@/lib/app-data";
 import { storageErrorResponse } from "@/lib/storage";
 
@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   try {
-    const devotionals = await readDevotionals();
+    const { devotionals } = await readAdminWorkingSet();
     return NextResponse.json({
       items: toAdminListItems(devotionals),
       devotionals,
