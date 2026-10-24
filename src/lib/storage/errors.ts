@@ -30,6 +30,7 @@ export function storageErrorReason(error: unknown): StorageErrorReason {
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
   if (
     msg.includes("max requests") ||
+    msg.includes("plan limit") ||
     msg.includes("rate limit") ||
     msg.includes("quota") ||
     msg.includes("too many requests") ||
