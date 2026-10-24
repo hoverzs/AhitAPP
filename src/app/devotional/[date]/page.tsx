@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
 import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
-import { isPublicDevotional } from "@/lib/devotional-status";
+import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
+import { resolveDevotionalView } from "@/lib/devotional-view";
 import { getDevotionalByDate } from "@/lib/devotionals";
+import { isPublicDevotional } from "@/lib/devotional-status";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
 import type { Metadata } from "next";
@@ -21,7 +23,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return { title: "Nem található" };
   }
 
-  const devotional = await getDevotionalByDate(date);
+  let devotional;
+  try {
+    devotional = await getDevotionalByDate(date);
+  } catch (error) {
+    console.error("[devotional/[date]] generateMetadata", error);
+    return { title: "Áhítat" };
+  }
   if (!devotional || !isPublicDevotional(devotional)) {
     return { title: "Nem található" };
   }
@@ -42,19 +50,23 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function DevotionalByDatePage({ params }: PageProps) {
   const { date } = await params;
 
+  console.log(`[devotional/[date]] route param date=${date}`);
+
   if (!DATE_RE.test(date)) {
     notFound();
   }
 
-  const devotional = await getDevotionalByDate(date);
-  if (!devotional) {
-    notFound();
+  const result = await resolveDevotionalView(date);
+
+  if (result.kind !== "ok") {
+    return (
+      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
+        <DevotionalUnavailable reason={result.kind} />
+      </article>
+    );
   }
 
-  if (!isPublicDevotional(devotional)) {
-    notFound();
-  }
-
+  const devotional = result.devotional;
   const publicUrl = getPublicDevotionalUrl(devotional.dayNumber);
 
   return (

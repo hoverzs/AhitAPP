@@ -59,7 +59,7 @@ export async function getLatestDevotionals(
 ): Promise<Devotional[]> {
   try {
     const storage = getDevotionalStorage();
-    return storage.getLatestDevotionals(options);
+    return await storage.getLatestDevotionals(options);
   } catch (error) {
     if (isProductionStorageNotConfiguredError(error)) {
       console.error("[getLatestDevotionals]", STORAGE_NOT_CONFIGURED_HU);
@@ -116,7 +116,29 @@ export async function getDevotionalByDay(
 export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
   try {
     const storage = getDevotionalStorage();
-    return storage.getDevotionalByDate(date);
+    const direct = await storage.getDevotionalByDate(date);
+    if (direct) {
+      return direct;
+    }
+
+    // Fallback: a naptár ugyanebből a listából épül, és devotionalDateKey()
+    // szerint azonosít. Ha a közvetlen kulcs-lekérdezés nem talál (pl. a tárolt
+    // kulcs és a rekord date mezője elcsúszott), itt a naptárral PONTOSAN azonos
+    // logikával keresünk, hogy ne fordulhasson elő naptárban aktív, de detail
+    // oldalon 404-elő nap.
+    const all = await storage.getLatestDevotionals();
+    const matched = all.find((d) => devotionalDateKey(d) === date);
+    if (matched) {
+      console.warn(
+        `[getDevotionalByDate] direct miss, list-fallback hit for date=${date} (dayNumber=${matched.dayNumber})`
+      );
+      return matched;
+    }
+
+    console.warn(
+      `[getDevotionalByDate] no record for date=${date} (storage + list-fallback miss)`
+    );
+    return undefined;
   } catch (error) {
     if (isProductionStorageNotConfiguredError(error)) {
       return undefined;

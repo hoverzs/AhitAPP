@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
 import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
-import { isPublicDevotional } from "@/lib/devotional-status";
+import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
+import { normalizeDevotionalStatus } from "@/lib/devotional-status";
 import type { Metadata } from "next";
 import { getDevotionalByDay } from "@/lib/devotionals";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
@@ -16,7 +17,13 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const dayNumber = Number(id);
-  const devotional = await getDevotionalByDay(dayNumber);
+  let devotional;
+  try {
+    devotional = await getDevotionalByDay(dayNumber);
+  } catch (error) {
+    console.error("[nap/[id]] generateMetadata", error);
+    return { title: "Áhítat" };
+  }
 
   if (!devotional) {
     return { title: "Nem található" };
@@ -39,17 +46,54 @@ export default async function DevotionalPage({ params }: PageProps) {
   const { id } = await params;
   const dayNumber = Number(id);
 
+  console.log(`[nap/[id]] route param id=${id} dayNumber=${dayNumber}`);
+
   if (!Number.isFinite(dayNumber) || dayNumber < 1) {
     notFound();
   }
 
-  const devotional = await getDevotionalByDay(dayNumber);
-  if (!devotional) {
-    notFound();
+  let devotional;
+  try {
+    devotional = await getDevotionalByDay(dayNumber);
+  } catch (error) {
+    console.error(`[nap/[id]] dayNumber=${dayNumber} → STORAGE ERROR`, error);
+    return (
+      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
+        <DevotionalUnavailable reason="error" />
+      </article>
+    );
   }
 
-  if (!isPublicDevotional(devotional)) {
-    notFound();
+  if (!devotional) {
+    console.warn(`[nap/[id]] dayNumber=${dayNumber} → MISSING (nincs rekord)`);
+    return (
+      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
+        <DevotionalUnavailable reason="missing" />
+      </article>
+    );
+  }
+
+  const status = normalizeDevotionalStatus(devotional.status);
+  const hasContent = Boolean(devotional.content?.trim());
+
+  console.log(
+    `[nap/[id]] dayNumber=${dayNumber} status=${status} hasContent=${hasContent} recordDate=${devotional.date ?? "(nincs)"}`
+  );
+
+  if (status !== "published") {
+    return (
+      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
+        <DevotionalUnavailable reason="unpublished" />
+      </article>
+    );
+  }
+
+  if (!hasContent) {
+    return (
+      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
+        <DevotionalUnavailable reason="incomplete" />
+      </article>
+    );
   }
 
   const publicUrl = getPublicDevotionalUrl(dayNumber);

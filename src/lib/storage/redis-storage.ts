@@ -56,6 +56,56 @@ function dataKey(date: string): string {
   return `${REDIS_DEVOTIONAL_DATA_PREFIX}${date}`;
 }
 
+/**
+ * Átmeneti Redis-hiba (rate limit / hálózat / timeout)? Ezeknél érdemes
+ * újrapróbálni, NEHOGY egy pillanatnyi blip miatt üresnek tűnjön a tároló és
+ * a főoldal kiürüljön.
+ */
+function isTransientRedisError(error: unknown): boolean {
+  const msg = (
+    error instanceof Error ? error.message : String(error)
+  ).toLowerCase();
+  return (
+    msg.includes("rate limit") ||
+    msg.includes("too many requests") ||
+    msg.includes("429") ||
+    msg.includes("502") ||
+    msg.includes("503") ||
+    msg.includes("etimedout") ||
+    msg.includes("econnreset") ||
+    msg.includes("econnrefused") ||
+    msg.includes("fetch failed") ||
+    msg.includes("network") ||
+    msg.includes("timeout")
+  );
+}
+
+/** Olvasási műveletek köré: átmeneti hibánál néhány gyors újrapróba. */
+async function withRedisRetry<T>(
+  label: string,
+  fn: () => Promise<T>,
+  attempts = 3
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientRedisError(error) || attempt === attempts) {
+        throw error;
+      }
+      const delayMs = 150 * attempt;
+      console.warn(
+        `[redisStorage] átmeneti hiba (${label}), újrapróba ${attempt}/${attempts - 1} ${delayMs}ms múlva:`,
+        error instanceof Error ? error.message : error
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 function parseStoredDevotional(raw: unknown): Devotional | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const list = parseDevotionalList([raw]);
@@ -185,16 +235,66 @@ async function readLatestFromRedis(
   return devotionals.sort((a, b) => b.dayNumber - a.dayNumber);
 }
 
+/**
+ * Folyamaton belüli pillanatkép a teljes listáról. Egy oldalmegjelenítés
+ * (layout + oldal + metadata) több helyen olvassa ugyanazt a listát; ez
+ * csökkenti a Redis-parancsok számát, és ha a Redis elérhetetlen (kvóta,
+ * hálózat), az utolsó ismert jó állapotot adjuk vissza üres oldal helyett.
+ */
+const SNAPSHOT_TTL_MS = 10_000;
+let snapshot: { at: number; list: Devotional[] } | null = null;
+
+function invalidateSnapshot(): void {
+  snapshot = null;
+}
+
+async function readAllWithSnapshot(): Promise<Devotional[]> {
+  if (snapshot && Date.now() - snapshot.at < SNAPSHOT_TTL_MS) {
+    return snapshot.list;
+  }
+  try {
+    const list = await withRedisRetry("getLatestDevotionals", () =>
+      readLatestFromRedis()
+    );
+    snapshot = { at: Date.now(), list };
+    return list;
+  } catch (error) {
+    if (snapshot) {
+      console.error(
+        "[redisStorage] Redis olvasás sikertelen, az utolsó ismert állapotot használom:",
+        error
+      );
+      return snapshot.list;
+    }
+    throw error;
+  }
+}
+
 export const redisStorage: DevotionalStorage = {
   async getLatestDevotionals(options) {
-    return readLatestFromRedis(options);
+    const list = await readAllWithSnapshot();
+    return options?.limit != null ? list.slice(0, options.limit) : list;
   },
 
   async getDevotionalByDate(date: string) {
-    const redis = getRedisClient();
-    await ensureRedisReady(redis);
-    const raw = await redis.get<unknown>(dataKey(date));
-    return parseStoredDevotional(raw);
+    try {
+      return await withRedisRetry(`getDevotionalByDate(${date})`, async () => {
+        const redis = getRedisClient();
+        await ensureRedisReady(redis);
+        const raw = await redis.get<unknown>(dataKey(date));
+        return parseStoredDevotional(raw);
+      });
+    } catch (error) {
+      const stale = snapshot?.list.find((d) => devotionalDateKey(d) === date);
+      if (stale) {
+        console.error(
+          `[redisStorage] getDevotionalByDate(${date}) sikertelen, pillanatkép használata:`,
+          error
+        );
+        return stale;
+      }
+      throw error;
+    }
   },
 
   async saveDevotional(devotional: Devotional) {
@@ -216,6 +316,7 @@ export const redisStorage: DevotionalStorage = {
 
     await writeDevotionalRecord(redis, normalized);
     await applyRetention(redis);
+    invalidateSnapshot();
     return normalized;
   },
 
@@ -243,6 +344,7 @@ export const redisStorage: DevotionalStorage = {
     }
 
     await applyRetention(redis);
+    invalidateSnapshot();
     return normalized;
   },
 
@@ -255,6 +357,7 @@ export const redisStorage: DevotionalStorage = {
       throw new Error(`Nincs áhítat erre a napra: ${date}.`);
     }
     await redis.del(dataKey(date));
+    invalidateSnapshot();
   },
 };
 
@@ -271,5 +374,6 @@ export async function migrateLocalJsonToRedis(): Promise<number> {
   }
   await applyRetention(redis);
   legacyMigrationDone = true;
+  invalidateSnapshot();
   return parsed.length;
 }

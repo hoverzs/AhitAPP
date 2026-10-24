@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   isProductionStorageNotConfiguredError,
   storageErrorMessage,
+  storageErrorReason,
   storageErrorStatus,
 } from "./errors";
 
@@ -27,6 +28,7 @@ export function withStorageErrorFallback(error: unknown): NextResponse {
     NextResponse.json(
       {
         error: storageErrorMessage(error),
+        reason: storageErrorReason(error),
       },
       { status: storageErrorStatus(error) }
     )

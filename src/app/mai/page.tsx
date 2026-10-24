@@ -10,7 +10,12 @@ export default async function MaiPage() {
   const todayIso = getTodayDateIso();
   logAppDateDebug("mai/page", { todayIso });
 
-  const devotional = await getDevotionalByDate(todayIso);
+  let devotional;
+  try {
+    devotional = await getDevotionalByDate(todayIso);
+  } catch (error) {
+    console.error("[mai/page] storage error", error);
+  }
 
   if (devotional && isPublicDevotional(devotional)) {
     redirect(`/devotional/${todayIso}`);

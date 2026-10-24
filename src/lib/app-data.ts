@@ -5,6 +5,7 @@ import {
   filterPublicDevotionals,
   isPendingReview,
   normalizeDevotional,
+  normalizeDevotionalStatus,
   statusLabelHu,
 } from "./devotional-status";
 import {
@@ -57,6 +58,13 @@ export async function loadHomePageData(): Promise<HomePageData> {
     const calendarDevotionals = filterCalendarDevotionals(all);
     const latest = getLatestDevotional(devotionals);
     const recent = getRecentDevotionals(devotionals, 3);
+
+    console.log(
+      `[loadHomePageData] featured latest → ` +
+        `date=${latest?.date ?? "(nincs)"} dayNumber=${latest?.dayNumber ?? "(nincs)"} ` +
+        `status=${latest ? normalizeDevotionalStatus(latest.status) : "(nincs)"} | ` +
+        `calendarDays=${calendarDevotionals.length} publicDays=${devotionals.length}`
+    );
 
     const displayVerse = resolveDisplayVerse(
       devotionals,
