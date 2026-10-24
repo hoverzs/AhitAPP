@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { normalizeDevotional } from "../devotional-status";
 import type { Devotional } from "../types";
+import { invalidatePublicDevotionalsCache } from "./cache-tags";
 import {
   devotionalDateKey,
   parseDevotionalList,
@@ -34,6 +35,7 @@ async function writeRawToFile(devotionals: Devotional[]): Promise<void> {
     JSON.stringify(sortDevotionals(devotionals), null, 2),
     "utf-8"
   );
+  invalidatePublicDevotionalsCache();
 }
 
 function latestFirst(all: Devotional[], limit?: number): Devotional[] {

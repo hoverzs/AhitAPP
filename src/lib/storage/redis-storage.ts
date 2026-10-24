@@ -9,10 +9,12 @@ import {
   sortDevotionals,
 } from "./devotional-validate";
 import { LOCAL_DEVOTIONALS_PATH } from "./local-json-storage";
+import { invalidatePublicDevotionalsCache } from "./cache-tags";
 import {
   getRetentionCutoffDate,
   getRetentionDays,
-  isDateWithinRetention,
+  isRetentionAutoDeleteEnabled,
+  planRetention,
 } from "./retention";
 import type { DevotionalStorage, GetLatestDevotionalsOptions } from "./types";
 
@@ -21,6 +23,8 @@ export const REDIS_DEVOTIONAL_INDEX_KEY = "ahitapp:devotional:index";
 export const REDIS_DEVOTIONAL_DATA_PREFIX = "ahitapp:devotional:data:";
 /** @deprecated Egyetlen blob — migrálás után törlődik */
 export const REDIS_DEVOTIONALS_LEGACY_KEY = "ahitapp:devotionals";
+/** Napi generálási feladat kulcs-előtag (generation-job-storage.ts) */
+export const REDIS_GENERATION_JOB_PREFIX = "ahitapp:generation:job:";
 
 let redisClient: Redis | null | undefined;
 let legacyMigrationDone = false;
@@ -125,17 +129,26 @@ async function writeDevotionalRecord(
   });
 }
 
+/**
+ * Régi áhítatok törlése az áhítat DÁTUMA alapján (a jövőbeliek megmaradnak).
+ * Csak a saját névterünket érinti: index + data kulcsok + a napi generálási
+ * feladat kulcs. Csak DEVOTIONAL_RETENTION_AUTO_DELETE=true esetén fut.
+ */
 async function applyRetention(redis: Redis): Promise<number> {
+  if (!isRetentionAutoDeleteEnabled()) return 0;
   const cutoff = getRetentionCutoffDate();
   if (!cutoff) return 0;
 
   const allDates = await redis.zrange<string[]>(REDIS_DEVOTIONAL_INDEX_KEY, 0, -1);
-  const toDelete = allDates.filter((date) => !isDateWithinRetention(date));
+  const toDelete = planRetention(allDates).remove;
 
   if (toDelete.length === 0) return 0;
 
   await redis.zrem(REDIS_DEVOTIONAL_INDEX_KEY, ...toDelete);
-  await redis.del(...toDelete.map(dataKey));
+  await redis.del(
+    ...toDelete.map(dataKey),
+    ...toDelete.map((d) => `${REDIS_GENERATION_JOB_PREFIX}${d}`)
+  );
 
   console.info(
     `[redisStorage] Retention (${getRetentionDays()} nap): ${toDelete.length} régi áhítat törölve (cutoff: ${cutoff}).`
@@ -196,11 +209,15 @@ async function seedFromBundledJson(redis: Redis): Promise<number> {
 async function ensureRedisReady(redis: Redis): Promise<void> {
   if (legacyMigrationDone) return;
 
-  await migrateLegacyBlob(redis);
-
-  const indexSize = await redis.zcard(REDIS_DEVOTIONAL_INDEX_KEY);
+  // Hideg indításonként egyetlen parancs (ZCARD). A legacy blob-migráció és a
+  // seed csak üres indexnél kell; a legacy kulcs migrálás után törlődik.
+  let indexSize = await redis.zcard(REDIS_DEVOTIONAL_INDEX_KEY);
   if (indexSize === 0) {
-    await seedFromBundledJson(redis);
+    await migrateLegacyBlob(redis);
+    indexSize = await redis.zcard(REDIS_DEVOTIONAL_INDEX_KEY);
+    if (indexSize === 0) {
+      await seedFromBundledJson(redis);
+    }
   }
 
   legacyMigrationDone = true;
@@ -246,6 +263,7 @@ let snapshot: { at: number; list: Devotional[] } | null = null;
 
 function invalidateSnapshot(): void {
   snapshot = null;
+  invalidatePublicDevotionalsCache();
 }
 
 async function readAllWithSnapshot(): Promise<Devotional[]> {

@@ -4,6 +4,7 @@ import { Redis } from "@upstash/redis";
 import {
   getRedisRestCredentials,
   isRedisStorageConfigured,
+  REDIS_GENERATION_JOB_PREFIX,
 } from "./storage/redis-storage";
 import { resolveStorageDriver } from "./storage";
 import {
@@ -11,7 +12,7 @@ import {
   type DailyGenerationJob,
 } from "./generation-job-types";
 
-export const REDIS_GENERATION_JOB_PREFIX = "ahitapp:generation:job:";
+export { REDIS_GENERATION_JOB_PREFIX };
 
 const LOCAL_JOBS_PATH = path.join(process.cwd(), "data", "generation-jobs.json");
 

@@ -10,7 +10,9 @@
     "migrate:redis": "npx tsx scripts/migrate-devotionals-to-redis.ts",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "retention:preview": "npx tsx scripts/retention.ts",
+    "retention:apply": "npx tsx scripts/retention.ts --apply"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

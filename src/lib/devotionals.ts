@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { normalizeDevotional } from "./devotional-status";
+import { PUBLIC_DEVOTIONALS_CACHE_TAG } from "./storage/cache-tags";
 import { isHeroImageUrl } from "./image-assets";
 import {
   devotionalDateKey,
@@ -113,32 +115,59 @@ export async function getDevotionalByDay(
   return all.find((d) => d.dayNumber === dayNumber);
 }
 
+const PUBLIC_CACHE_REVALIDATE_SECONDS = 300;
+
+const cachedPublicList = unstable_cache(
+  async () => getDevotionalStorage().getLatestDevotionals(),
+  ["public-devotionals-list-v1"],
+  {
+    revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS,
+    tags: [PUBLIC_DEVOTIONALS_CACHE_TAG],
+  }
+);
+
+/**
+ * Nyilvános oldalak listája a Next data cache-ből (5 perc, írásnál
+ * érvénytelenítve) — egy látogatás ne olvassa újra a teljes Redis-listát.
+ * Az admin / generálás NEM ezt használja, ott mindig friss az olvasás.
+ */
+export async function getPublicDevotionalsCached(): Promise<Devotional[]> {
+  try {
+    return await cachedPublicList();
+  } catch (error) {
+    // Next futtatókörnyezeten kívül (tsx script) nincs data cache.
+    if (error instanceof Error && /incrementalCache/i.test(error.message)) {
+      return getDevotionalStorage().getLatestDevotionals();
+    }
+    throw error;
+  }
+}
+
+export async function getPublicDevotionalByDay(
+  dayNumber: number
+): Promise<Devotional | undefined> {
+  try {
+    const all = await getPublicDevotionalsCached();
+    return all.find((d) => d.dayNumber === dayNumber);
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) return undefined;
+    throw error;
+  }
+}
+
+/**
+ * Nyilvános oldal: dátum szerinti keresés ugyanabból a (cache-elt) listából,
+ * amelyből a naptár is épül, devotionalDateKey() szerint — így naptárban aktív
+ * nap nem adhat 404-et, és nincs külön Redis-parancs oldalmegjelenítésenként.
+ */
 export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
   try {
-    const storage = getDevotionalStorage();
-    const direct = await storage.getDevotionalByDate(date);
-    if (direct) {
-      return direct;
-    }
-
-    // Fallback: a naptár ugyanebből a listából épül, és devotionalDateKey()
-    // szerint azonosít. Ha a közvetlen kulcs-lekérdezés nem talál (pl. a tárolt
-    // kulcs és a rekord date mezője elcsúszott), itt a naptárral PONTOSAN azonos
-    // logikával keresünk, hogy ne fordulhasson elő naptárban aktív, de detail
-    // oldalon 404-elő nap.
-    const all = await storage.getLatestDevotionals();
+    const all = await getPublicDevotionalsCached();
     const matched = all.find((d) => devotionalDateKey(d) === date);
-    if (matched) {
-      console.warn(
-        `[getDevotionalByDate] direct miss, list-fallback hit for date=${date} (dayNumber=${matched.dayNumber})`
-      );
-      return matched;
+    if (!matched) {
+      console.warn(`[getDevotionalByDate] no record for date=${date}`);
     }
-
-    console.warn(
-      `[getDevotionalByDate] no record for date=${date} (storage + list-fallback miss)`
-    );
-    return undefined;
+    return matched;
   } catch (error) {
     if (isProductionStorageNotConfiguredError(error)) {
       return undefined;

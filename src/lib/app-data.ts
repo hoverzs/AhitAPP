@@ -1,4 +1,8 @@
-import { readDevotionalsWithStatus } from "./devotionals";
+import {
+  getPublicDevotionalsCached,
+  readDevotionalsWithStatus,
+} from "./devotionals";
+import { isProductionStorageNotConfiguredError } from "./storage";
 import { buildDevotionalMemory } from "./devotional-memory";
 import {
   filterCalendarDevotionals,
@@ -51,9 +55,19 @@ const EMPTY_HOME: HomePageData = {
   recent: [],
 };
 
+/** Nyilvános oldalak: cache-elt lista; nem konfigurált tárolónál üres. */
+async function readPublicList(): Promise<Devotional[]> {
+  try {
+    return await getPublicDevotionalsCached();
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) return [];
+    throw error;
+  }
+}
+
 export async function loadHomePageData(): Promise<HomePageData> {
   try {
-    const { devotionals: all } = await readDevotionalsWithStatus();
+    const all = await readPublicList();
     const devotionals = filterPublicDevotionals(all);
     const calendarDevotionals = filterCalendarDevotionals(all);
     const latest = getLatestDevotional(devotionals);
@@ -99,7 +113,7 @@ export async function loadSiteNavData(): Promise<{
   publishedCount: number;
 }> {
   try {
-    const { devotionals: published } = await readDevotionalsWithStatus();
+    const published = await readPublicList();
     const devotionals = filterPublicDevotionals(published);
     const latest = getLatestDevotional(devotionals);
     return {

@@ -1,8 +1,13 @@
 import { addDaysToIsoDate, getAppTodayIso } from "../app-date";
 
-const DEFAULT_RETENTION_DAYS = 0;
+export const DEFAULT_RETENTION_DAYS = 60;
 
-/** 0 = retention kikapcsolva (minden megmarad). Alapértelmezés: kikapcsolva. */
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Hány napnyi áhítat maradjon meg (az áhítat DÁTUMA alapján).
+ * Alapértelmezés: 60. DEVOTIONAL_RETENTION_DAYS=0 → nincs korlát.
+ */
 export function getRetentionDays(): number {
   const raw = process.env.DEVOTIONAL_RETENTION_DAYS?.trim();
   if (!raw) return DEFAULT_RETENTION_DAYS;
@@ -10,6 +15,15 @@ export function getRetentionDays(): number {
   const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed) || parsed < 0) return DEFAULT_RETENTION_DAYS;
   return parsed;
+}
+
+/**
+ * Az automatikus törlés csak kifejezett engedélyezéssel fut
+ * (DEVOTIONAL_RETENTION_AUTO_DELETE=true). Enélkül a retention csak
+ * előnézetként használható (npm run retention:preview), éles adat nem törlődik.
+ */
+export function isRetentionAutoDeleteEnabled(): boolean {
+  return process.env.DEVOTIONAL_RETENTION_AUTO_DELETE?.trim().toLowerCase() === "true";
 }
 
 /** @deprecated Használd parseIsoDateParts (app-date). */
@@ -31,11 +45,51 @@ export function getRetentionCutoffDate(
   return addDaysToDateIso(referenceDate, -days);
 }
 
+/**
+ * Megmarad-e a dátum? A cutoff-nál újabb VAGY jövőbeli dátum megmarad
+ * (előre elkészített áhítatok). Nem YYYY-MM-DD formátumú kulcsot soha
+ * nem tekintünk törlendőnek.
+ */
 export function isDateWithinRetention(
   date: string,
   referenceDate: string = getAppTodayIso()
 ): boolean {
+  if (!ISO_DATE_RE.test(date)) return true;
   const cutoff = getRetentionCutoffDate(referenceDate);
   if (!cutoff) return true;
   return date >= cutoff;
+}
+
+export interface RetentionPlan {
+  referenceDate: string;
+  retentionDays: number;
+  cutoff: string | null;
+  keep: string[];
+  remove: string[];
+  future: string[];
+}
+
+/** Tiszta függvény: mely dátumok törlendők / maradnak. Semmit nem töröl. */
+export function planRetention(
+  dates: string[],
+  referenceDate: string = getAppTodayIso()
+): RetentionPlan {
+  const retentionDays = getRetentionDays();
+  const cutoff = getRetentionCutoffDate(referenceDate);
+  const sorted = [...dates].sort();
+  // A legfrissebb áhítat mindig megmarad (a napszámozás max(dayNumber)+1 alapú,
+  // és hosszú kihagyás után sem üresedhet ki a tároló).
+  const newest = [...sorted].reverse().find((d) => ISO_DATE_RE.test(d));
+  const remove = sorted.filter(
+    (d) => d !== newest && !isDateWithinRetention(d, referenceDate)
+  );
+  const removeSet = new Set(remove);
+  return {
+    referenceDate,
+    retentionDays,
+    cutoff,
+    keep: sorted.filter((d) => !removeSet.has(d)),
+    remove,
+    future: sorted.filter((d) => ISO_DATE_RE.test(d) && d > referenceDate),
+  };
 }

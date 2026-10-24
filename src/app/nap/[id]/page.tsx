@@ -4,7 +4,7 @@ import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareB
 import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
 import { normalizeDevotionalStatus } from "@/lib/devotional-status";
 import type { Metadata } from "next";
-import { getDevotionalByDay } from "@/lib/devotionals";
+import { getPublicDevotionalByDay } from "@/lib/devotionals";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
 
@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const dayNumber = Number(id);
   let devotional;
   try {
-    devotional = await getDevotionalByDay(dayNumber);
+    devotional = await getPublicDevotionalByDay(dayNumber);
   } catch (error) {
     console.error("[nap/[id]] generateMetadata", error);
     return { title: "Áhítat" };
@@ -54,7 +54,7 @@ export default async function DevotionalPage({ params }: PageProps) {
 
   let devotional;
   try {
-    devotional = await getDevotionalByDay(dayNumber);
+    devotional = await getPublicDevotionalByDay(dayNumber);
   } catch (error) {
     console.error(`[nap/[id]] dayNumber=${dayNumber} → STORAGE ERROR`, error);
     return (
