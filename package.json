@@ -12,12 +12,17 @@
     "start": "next start",
     "lint": "next lint",
     "retention:preview": "npx tsx scripts/retention.ts",
-    "retention:apply": "npx tsx scripts/retention.ts --apply"
+    "retention:apply": "npx tsx scripts/retention.ts --apply",
+    "test": "tsx --test tests/*.test.ts",
+    "migrate:redis-to-blob": "tsx scripts/redis-to-blob.ts",
+    "blob:preflight": "tsx scripts/blob-preflight.ts",
+    "blob:retention": "tsx scripts/blob-retention.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.8.2",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

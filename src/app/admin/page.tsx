@@ -11,8 +11,17 @@ export default async function AdminPage() {
     redirect("/admin/login");
   }
 
-  const { memory, reviewDevotional, adminContext, listItems, devotionals, storageError, storageHint } =
-    await loadAdminPageData();
+  const {
+    memory,
+    reviewDevotional,
+    adminContext,
+    listItems,
+    devotionals,
+    storageError,
+    storageHint,
+    storageReason,
+    storageDetail,
+  } = await loadAdminPageData();
 
   return (
     <AdminDashboard
@@ -24,6 +33,8 @@ export default async function AdminPage() {
       initialDevotionals={devotionals}
       storageError={storageError}
       storageHint={storageHint}
+      storageReason={storageReason}
+      storageDetail={storageDetail}
     />
   );
 }

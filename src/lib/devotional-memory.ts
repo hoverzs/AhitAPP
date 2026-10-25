@@ -64,6 +64,73 @@ export function isVerseReferenceUsed(
   return Boolean(findVerseReferenceMatch(candidate, usedReferences));
 }
 
+/** A tároló rekordokon túli előzménye (Blob meta.json) — a törölt napok emlékezete. */
+export interface StoredMemoryMeta {
+  maxDayNumber: number;
+  usedVerseReferences: string[];
+  usedTitles: string[];
+  usedCategories: string[];
+  recentDays?: HistoricalDayEntry[];
+}
+
+const RECENT_DAYS_LIMIT = 21;
+
+function unionKeepingOrder(stored: string[], current: string[]): string[] {
+  const seen = new Set(stored);
+  return [...stored, ...current.filter((c) => !seen.has(c))];
+}
+
+/**
+ * A rekordokból épített memóriát kiegészíti a tárolt előzménnyel, hogy a már
+ * törölt napok igehelyei, címei és kategóriái továbbra is számítsanak az
+ * ismétlés-védelemben. A nextDayNumber (generálási cél) változatlan marad.
+ */
+export function mergeStoredMetaIntoMemory(
+  memory: DevotionalMemory,
+  meta: StoredMemoryMeta | null | undefined
+): DevotionalMemory {
+  if (!meta) return memory;
+
+  const usedVerseReferences = unionKeepingOrder(
+    meta.usedVerseReferences,
+    memory.usedVerseReferences
+  );
+  const usedTitles = unionKeepingOrder(meta.usedTitles, memory.usedTitles);
+  const usedCategories = unionKeepingOrder(meta.usedCategories, memory.usedCategories);
+
+  const byDay = new Map<number, HistoricalDayEntry>();
+  for (const d of meta.recentDays ?? []) byDay.set(d.dayNumber, d);
+  for (const d of memory.recentDays) byDay.set(d.dayNumber, d);
+  const recentDays = [...byDay.values()]
+    .sort((a, b) => a.dayNumber - b.dayNumber)
+    .slice(-RECENT_DAYS_LIMIT);
+
+  const maxDayNumber = Math.max(memory.maxDayNumber, meta.maxDayNumber);
+
+  const summary = {
+    totalPublished: memory.totalPublished,
+    maxDayNumber,
+    nextDayNumber: memory.nextDayNumber,
+    usedTitles,
+    usedCategories,
+    recentDays,
+    thematicHint:
+      usedCategories.length > 0
+        ? `Legutóbbi kategóriák: ${usedCategories.slice(-5).join(", ")}`
+        : "Még nincs korábbi kategória — kezdd egy erős bevezető héttémával (pl. Önreflexió).",
+  };
+
+  return {
+    ...memory,
+    maxDayNumber,
+    usedVerseReferences,
+    usedTitles,
+    usedCategories,
+    recentDays,
+    summaryForPrompt: JSON.stringify(summary, null, 2),
+  };
+}
+
 export function buildDevotionalMemory(
   devotionals: Devotional[],
   options?: { nextDayNumber?: number }

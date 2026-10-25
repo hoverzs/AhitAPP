@@ -1,4 +1,5 @@
-import { Redis } from "@upstash/redis";
+import type { Redis } from "@upstash/redis";
+import { createRedisClient } from "./redis-client";
 import { promises as fs } from "fs";
 import {
   normalizeDevotional,
@@ -46,7 +47,7 @@ export function isRedisStorageConfigured(): boolean {
 function getRedisClient(): Redis {
   if (redisClient === undefined) {
     const creds = getRedisRestCredentials();
-    redisClient = creds ? new Redis({ url: creds.url, token: creds.token }) : null;
+    redisClient = creds ? createRedisClient(creds.url, creds.token) : null;
   }
   if (!redisClient) {
     throw new Error("Redis client is not configured.");

@@ -50,6 +50,31 @@ interface AdminDevotionalBody {
   imageKeywords?: string;
 }
 
+/** Egy nap teljes rekordja (a „lusta" admin ezzel tölti be a kiválasztott napot). */
+export async function GET(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
+  }
+
+  const day = Number(new URL(request.url).searchParams.get("day"));
+  if (!Number.isInteger(day) || day < 1) {
+    return NextResponse.json({ error: "Érvénytelen day." }, { status: 400 });
+  }
+
+  try {
+    const devotional = await getDevotionalByDay(day);
+    if (!devotional) {
+      return NextResponse.json({ error: "Nem található." }, { status: 404 });
+    }
+    return NextResponse.json({ devotional });
+  } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+    const message = err instanceof Error ? err.message : "Betöltés sikertelen.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: Request) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });

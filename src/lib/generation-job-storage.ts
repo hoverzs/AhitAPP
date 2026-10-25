@@ -1,12 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
-import { Redis } from "@upstash/redis";
+import type { Redis } from "@upstash/redis";
+import { createRedisClient } from "./storage/redis-client";
 import {
   getRedisRestCredentials,
   isRedisStorageConfigured,
   REDIS_GENERATION_JOB_PREFIX,
 } from "./storage/redis-storage";
-import { resolveStorageDriver } from "./storage";
+import { getBlobJobStore, resolveStorageDriver } from "./storage";
 import {
   normalizeGenerationJob,
   type DailyGenerationJob,
@@ -25,7 +26,7 @@ let redisClient: Redis | null | undefined;
 function getRedisClient(): Redis | null {
   if (redisClient === undefined) {
     const creds = getRedisRestCredentials();
-    redisClient = creds ? new Redis({ url: creds.url, token: creds.token }) : null;
+    redisClient = creds ? createRedisClient(creds.url, creds.token) : null;
   }
   return redisClient;
 }
@@ -33,6 +34,10 @@ function getRedisClient(): Redis | null {
 function shouldPersistJobsInRedis(): boolean {
   const driver = resolveStorageDriver();
   return driver === "redis" && isRedisStorageConfigured();
+}
+
+function shouldPersistJobsInBlob(): boolean {
+  return resolveStorageDriver() === "blob";
 }
 
 async function readLocalJobsFile(): Promise<Record<string, DailyGenerationJob>> {
@@ -58,6 +63,11 @@ async function writeLocalJobsFile(
 export async function getGenerationJob(
   date: string
 ): Promise<DailyGenerationJob | null> {
+  if (shouldPersistJobsInBlob()) {
+    const job = await getBlobJobStore().get(date);
+    return job ? normalizeGenerationJob(job) : null;
+  }
+
   if (shouldPersistJobsInRedis()) {
     const redis = getRedisClient();
     if (!redis) return null;
@@ -71,6 +81,11 @@ export async function getGenerationJob(
 }
 
 export async function saveGenerationJob(job: DailyGenerationJob): Promise<void> {
+  if (shouldPersistJobsInBlob()) {
+    await getBlobJobStore().save(job);
+    return;
+  }
+
   if (shouldPersistJobsInRedis()) {
     const redis = getRedisClient();
     if (!redis) {
@@ -86,6 +101,11 @@ export async function saveGenerationJob(job: DailyGenerationJob): Promise<void> 
 }
 
 export async function deleteGenerationJob(date: string): Promise<void> {
+  if (shouldPersistJobsInBlob()) {
+    await getBlobJobStore().delete(date);
+    return;
+  }
+
   if (shouldPersistJobsInRedis()) {
     const redis = getRedisClient();
     if (redis) {

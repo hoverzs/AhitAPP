@@ -1,7 +1,19 @@
-import { getPublicWindowDevotionals, readAdminWorkingSet } from "./devotionals";
-import { devotionalDateKey } from "./storage";
+import {
+  getPublicWindowDevotionals,
+  isLazyAdminStorage,
+  readAdminEntries,
+  readAdminWorkingSet,
+} from "./devotionals";
+import { entryToListItem, entryToStub } from "./admin-entries";
+import {
+  describeStorageReasonHu,
+  devotionalDateKey,
+  getDevotionalStorage,
+  storageErrorReason,
+} from "./storage";
+import type { StorageErrorReason } from "./storage/errors";
 import { getPublicWindowDates } from "./public-window";
-import { buildDevotionalMemory } from "./devotional-memory";
+import { buildDevotionalMemory, mergeStoredMetaIntoMemory } from "./devotional-memory";
 import {
   isPendingReview,
   normalizeDevotional,
@@ -172,25 +184,81 @@ export function toAdminListItems(devotionals: Devotional[]): AdminDevotionalList
     }));
 }
 
-export async function loadAdminPageData(): Promise<{
+export interface AdminPageData {
   memory: DevotionalMemory;
   latest: Devotional | null;
   reviewDevotional: Devotional | null;
   adminContext: AdminDevotionalContext;
+  /** Teljes rekordok — „lusta" tárolónál csak az előnézetben megnyitott nap. */
   devotionals: Devotional[];
   listItems: AdminDevotionalListItem[];
   storageError: string | null;
   storageHint: string | null;
-}> {
+  /** A tárolóhiba oka (a cím és a magyarázat ebből készül), ha van hiba. */
+  storageReason: StorageErrorReason | null;
+  /** A tároló eredeti hibaüzenete (diagnosztikához). */
+  storageDetail: string | null;
+}
+
+/**
+ * „Lusta" admin (Blob): a lista és a generálási cél a könnyű index-sorokból
+ * épül; teljes rekordot csak a megnyitandó (mai / függő / legutóbbi) napról
+ * olvasunk, a többit az admin igény szerint tölti be.
+ */
+async function loadLazyAdminPageData(): Promise<AdminPageData> {
+  const { entries, meta } = await readAdminEntries();
+  const stubs = entries.map(entryToStub).map(normalizeDevotional);
+  const todayIso = getAppTodayIso();
+
+  const reviewDate =
+    entries.find((e) => e.date === todayIso)?.date ??
+    entries.find((e) => isPendingReview(e.status))?.date ??
+    getLatestDevotional(stubs)?.date ??
+    null;
+  const reviewDevotional = reviewDate
+    ? ((await getDevotionalStorage().getDevotionalByDate(reviewDate)) ?? null)
+    : null;
+
+  const target = resolveManualGenerationTarget(stubs);
+  // A rekordok törlése után is megmaradó előzmény (meta) kiegészíti a csonkokét.
+  const memory = mergeStoredMetaIntoMemory(
+    buildDevotionalMemory(stubs, { nextDayNumber: target.dayNumber }),
+    meta
+  );
+
+  return {
+    memory,
+    latest: reviewDevotional,
+    reviewDevotional,
+    adminContext: await buildAdminDevotionalContext(stubs),
+    devotionals: reviewDevotional ? [reviewDevotional] : [],
+    listItems: entries.map(entryToListItem),
+    storageError: null,
+    storageHint: null,
+    storageReason: null,
+    storageDetail: null,
+  };
+}
+
+export async function loadAdminPageData(): Promise<AdminPageData> {
   let working: Awaited<ReturnType<typeof readAdminWorkingSet>>;
+  let storageReason: StorageErrorReason | null = null;
+  let storageDetail: string | null = null;
   try {
+    if (isLazyAdminStorage()) {
+      return await loadLazyAdminPageData();
+    }
     working = await readAdminWorkingSet();
+    if (working.storageError) storageReason = "not_configured";
   } catch (error) {
     console.error("[loadAdminPageData]", error);
+    storageReason = storageErrorReason(error);
+    storageDetail = error instanceof Error ? error.message : null;
+    const info = describeStorageReasonHu(storageReason);
     working = {
       devotionals: [],
-      storageError: "Nem sikerült betölteni az áhítatokat.",
-      storageHint: error instanceof Error ? error.message : null,
+      storageError: info.message,
+      storageHint: info.hint,
       driver: "redis",
     };
   }
@@ -207,6 +275,8 @@ export async function loadAdminPageData(): Promise<{
       listItems: [],
       storageError,
       storageHint,
+      storageReason,
+      storageDetail,
     };
   }
 
@@ -234,6 +304,8 @@ export async function loadAdminPageData(): Promise<{
       listItems: toAdminListItems(devotionals),
       storageError: null,
       storageHint: null,
+      storageReason: null,
+      storageDetail: null,
     };
   } catch (error) {
     console.error("[loadAdminPageData]", error);
@@ -247,6 +319,8 @@ export async function loadAdminPageData(): Promise<{
       listItems: [],
       storageError: "Nem sikerült betölteni az áhítatokat.",
       storageHint: error instanceof Error ? error.message : null,
+      storageReason: "unknown",
+      storageDetail: null,
     };
   }
 }

@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "images.pexels.com",
       },
+      {
+        // Vercel Blob képtár (nyilvános store) — csak az images/ útvonal.
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+        pathname: "/images/**",
+      },
     ],
   },
 };

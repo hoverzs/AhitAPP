@@ -6,6 +6,7 @@ import {
   toGeminiErrorDetails,
 } from "@/lib/gemini-errors";
 import { previewDevotionalRefinement } from "@/lib/refine-devotional";
+import { storageErrorResponse } from "@/lib/storage";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -46,6 +47,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
+    const storage = storageErrorResponse(err);
+    if (storage) return storage;
+
     logGeminiError(err, "POST /api/admin/devotional/refine");
     const details = toGeminiErrorDetails(err);
     return NextResponse.json(buildGeminiErrorApiPayload(details), {

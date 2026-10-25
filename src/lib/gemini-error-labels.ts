@@ -37,6 +37,10 @@ export function getGeminiErrorTitle(code: GeminiErrorCode | string | undefined):
       return "Metadata generálás sikertelen";
     case "DUPLICATE_VERSE":
       return "Ismétlődő igehely";
+    case "STORAGE_ERROR":
+      return "Tárolóhiba (Redis)";
+    case "STORAGE_NOT_CONFIGURED":
+      return "Production tároló nincs beállítva";
     case "AUTH":
       return "API kulcs / jogosultság hiba";
     case "QUOTA":

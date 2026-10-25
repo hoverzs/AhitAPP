@@ -7,12 +7,17 @@ import { isHeroImageUrl } from "./image-assets";
 import {
   devotionalDateKey,
   getDevotionalStorage,
+  getImageStore,
+  isOwnedBlobImageUrl,
   isProductionStorageNotConfiguredError,
+  isBlobStorageConfigured,
   isRemoteStorageRequired,
   isRedisStorageConfigured,
   resolveStorageDriver,
   type GetLatestDevotionalsOptions,
 } from "./storage";
+import type { AdminIndexEntry } from "./storage";
+import type { StorageMetaSummary } from "./storage/types";
 import type { Devotional, DevotionalStatus } from "./types";
 
 export { ProductionStorageNotConfiguredError } from "./storage";
@@ -26,10 +31,10 @@ export interface ReadDevotionalsResult {
 }
 
 const STORAGE_NOT_CONFIGURED_HU =
-  "A production tároló nincs konfigurálva (Upstash Redis / Vercel KV).";
+  "A production tároló nincs konfigurálva (Upstash Redis / Vercel KV vagy Vercel Blob).";
 
 const STORAGE_NOT_CONFIGURED_HINT =
-  "Vercel → Project → Storage / Integrations → Upstash Redis. Production env: KV_REST_API_URL és KV_REST_API_TOKEN. Ezután redeploy, vagy futtasd: npm run migrate:redis";
+  "Redis: Vercel → Project → Storage / Integrations → Upstash Redis, Production env: KV_REST_API_URL és KV_REST_API_TOKEN. Blob (STORAGE_DRIVER=blob): kösd a Blob store-t a projekthez (BLOB_STORE_ID). Ezután redeploy.";
 
 /** Admin / diagnosztika — storage hiba státusszal. */
 export async function readDevotionalsWithStatus(): Promise<ReadDevotionalsResult> {
@@ -83,6 +88,7 @@ export function getStorageDiagnostics() {
     driver: resolveStorageDriver(),
     remoteRequired: isRemoteStorageRequired(),
     redisConfigured: isRedisStorageConfigured(),
+    blobConfigured: isBlobStorageConfigured(),
   };
 }
 
@@ -110,14 +116,73 @@ export async function writeDevotionals(devotionals: Devotional[]): Promise<void>
   }
 }
 
-export async function getDevotionalByDay(
-  dayNumber: number
-): Promise<Devotional | undefined> {
-  const all = await getLatestDevotionals();
+/**
+ * Napszám szerinti keresés. Ha a tároló tudja (Blob: index + egyetlen rekord),
+ * nem olvassa be a teljes készletet.
+ */
+async function findByDayNumber(dayNumber: number): Promise<Devotional | undefined> {
+  const storage = getDevotionalStorage();
+  if (storage.getDevotionalByDayNumber) {
+    return storage.getDevotionalByDayNumber(dayNumber);
+  }
+  const all = await storage.getLatestDevotionals();
   return all.find((d) => d.dayNumber === dayNumber);
 }
 
-const PUBLIC_CACHE_REVALIDATE_SECONDS = 600;
+export async function getDevotionalByDay(
+  dayNumber: number
+): Promise<Devotional | undefined> {
+  try {
+    return await findByDayNumber(dayNumber);
+  } catch (error) {
+    if (isProductionStorageNotConfiguredError(error)) {
+      console.error("[getDevotionalByDay]", STORAGE_NOT_CONFIGURED_HU);
+      return undefined;
+    }
+    throw error;
+  }
+}
+
+/**
+ * A tároló rekordokon túli előzménye (Blob meta.json), vagy null. A generálás
+ * ezzel egészíti ki a memóriát, hogy a törölt napok igehelyei is számítsanak.
+ */
+export async function readStoredMeta(): Promise<StorageMetaSummary | null> {
+  const storage = getDevotionalStorage();
+  return storage.getMeta ? storage.getMeta() : null;
+}
+
+/** „Lusta" admin: ha a tároló könnyű sorokat ad, a teljes rekordot igény szerint töltjük. */
+export function isLazyAdminStorage(): boolean {
+  return typeof getDevotionalStorage().listAdminEntries === "function";
+}
+
+export interface AdminEntriesResult {
+  entries: AdminIndexEntry[];
+  /** A tároló eredeti, rekordokon túli előzménye (használt igehelyek, kategóriák). */
+  meta: StorageMetaSummary | null;
+}
+
+/** Admin: a mai nap, a jövőbeli és az elmúlt 7 nap könnyű sorai (+ a legújabb rekord). */
+export async function readAdminEntries(): Promise<AdminEntriesResult> {
+  const storage = getDevotionalStorage();
+  if (!storage.listAdminEntries) {
+    throw new Error("A tároló nem támogatja a könnyű admin-listát.");
+  }
+  const minDate = getPublicWindowDates().at(-1)!;
+  const [entries, meta] = await Promise.all([
+    storage.listAdminEntries(minDate),
+    storage.getMeta?.() ?? Promise.resolve(null),
+  ]);
+  return { entries, meta };
+}
+
+/**
+ * A nyilvános ablak gyorsítótárának élettartama. Íráskor a címke azonnal
+ * érvényteleníti, ezért az 1 óra csak a „külső” változásokat késlelteti; a
+ * hosszabb idő kevesebb Blob-olvasást jelent (Hobby keret).
+ */
+export const PUBLIC_CACHE_REVALIDATE_SECONDS = 3600;
 
 /**
  * A nyilvános 8 napos ablak (mai nap + előző 7 nap) a Next data cache-ből.
@@ -127,8 +192,12 @@ const PUBLIC_CACHE_REVALIDATE_SECONDS = 600;
  */
 const cachedPublicWindow = unstable_cache(
   async (today: string) => {
-    const dates = getPublicWindowDates(today);
-    const records = await getDevotionalStorage().getDevotionalsByDates(dates);
+    const storage = getDevotionalStorage();
+    // Blob: egyetlen olvasás a karbantartott pillanatképből. Ha az még nem
+    // létezik, vagy a tároló nem ismeri, a nyolc dátum közvetlen olvasása.
+    const snapshot = await storage.getPublicWindowDevotionals?.();
+    const records =
+      snapshot ?? (await storage.getDevotionalsByDates(getPublicWindowDates(today)));
     return filterPublicDevotionals(records).sort(
       (a, b) => devotionalDateKey(b).localeCompare(devotionalDateKey(a))
     );
@@ -148,9 +217,10 @@ export async function getPublicWindowDevotionals(): Promise<Devotional[]> {
   } catch (error) {
     // Next futtatókörnyezeten kívül (tsx script) nincs data cache.
     if (error instanceof Error && /incrementalCache/i.test(error.message)) {
-      const records = await getDevotionalStorage().getDevotionalsByDates(
-        getPublicWindowDates(today)
-      );
+      const storage = getDevotionalStorage();
+      const snapshot = await storage.getPublicWindowDevotionals?.();
+      const records =
+        snapshot ?? (await storage.getDevotionalsByDates(getPublicWindowDates(today)));
       return filterPublicDevotionals(records);
     }
     if (isProductionStorageNotConfiguredError(error)) return [];
@@ -172,7 +242,7 @@ export type PublicDevotionalLookup =
 
 /**
  * Dátum szerinti nyilvános keresés. Az ablakon kívüli dátum lejárt" (nem
- * kérdezünk le semmit Redisből), az ablakon belüli, de nem közzétett vagy
+ * kérdezünk le semmit a tárolóból), az ablakon belüli, de nem közzétett vagy
  * hiányzó dátum missing".
  */
 export async function lookupPublicDevotionalByDate(
@@ -215,12 +285,12 @@ export async function appendDevotional(entry: Devotional): Promise<Devotional> {
 export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
   const storage = getDevotionalStorage();
   const normalized = normalizeDevotional(entry);
-  const all = await storage.getLatestDevotionals();
-  const idx = all.findIndex((d) => d.dayNumber === normalized.dayNumber);
+  const existing = await findByDayNumber(normalized.dayNumber);
 
-  if (idx >= 0) {
-    const date = devotionalDateKey(all[idx]);
-    return storage.updateDevotional(date, normalized);
+  if (existing) {
+    const saved = await storage.updateDevotional(devotionalDateKey(existing), normalized);
+    await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
+    return saved;
   }
 
   return storage.saveDevotional(normalized);
@@ -231,8 +301,7 @@ async function patchDevotionalByDay(
   patch: Partial<Devotional>
 ): Promise<Devotional> {
   const storage = getDevotionalStorage();
-  const all = await storage.getLatestDevotionals();
-  const existing = all.find((d) => d.dayNumber === dayNumber);
+  const existing = await findByDayNumber(dayNumber);
 
   if (!existing) {
     throw new Error(`A ${dayNumber}. nap nem található.`);
@@ -240,7 +309,9 @@ async function patchDevotionalByDay(
 
   const date = devotionalDateKey(existing);
   const updated = normalizeDevotional({ ...existing, ...patch });
-  return storage.updateDevotional(date, updated);
+  const saved = await storage.updateDevotional(date, updated);
+  await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
+  return saved;
 }
 
 export async function updateDevotionalStatus(
@@ -381,5 +452,27 @@ export async function saveDevotionalImageKeywords(
 
 export async function deleteDevotionalByDate(date: string): Promise<void> {
   const storage = getDevotionalStorage();
+  const existing = await storage.getDevotionalByDate(date);
   await storage.deleteDevotional(date);
+  await cleanupReplacedImage(existing?.imageUrl, "");
+}
+
+/**
+ * Ha egy áhítat saját (feltöltött, Blob képtárban lévő) képe lecserélődött,
+ * eltávolítódott vagy az áhítat törlődött, a régi blobot töröljük. Külső
+ * (Pexels) és helyi képhez soha nem nyúl. A hiba nem akadályozza a mentést —
+ * legfeljebb árva kép marad.
+ */
+export async function cleanupReplacedImage(
+  before: string | undefined,
+  after: string | undefined
+): Promise<void> {
+  if (!before || before === after || !isOwnedBlobImageUrl(before)) return;
+  const store = getImageStore();
+  if (!store) return;
+  try {
+    await store.del([before]);
+  } catch (error) {
+    console.error("[cleanupReplacedImage] a régi kép törlése sikertelen:", error);
+  }
 }

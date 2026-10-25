@@ -3,6 +3,7 @@ import type { GeminiErrorDebugInfo } from "./gemini-error-labels";
 import { isCronGenerationEnabled } from "./dev-review";
 import { isProductionDeployment } from "./cron-env";
 import { readDevotionals } from "./devotionals";
+import { isAnyStorageError, storageErrorReason } from "./storage";
 import { GenerationSkippedError } from "./generate-devotional";
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
 import { getDevotionalByDate, getTodayDateIso } from "./generation-target";
@@ -230,6 +231,16 @@ export async function runDailyCronGeneration(options?: {
       generationJob: jobSummary,
     };
   } catch (error) {
+    // Tárolóhiba (pl. Redis-korlát): a route 503 tárolóhibaként jelzi, nem
+    // „Gemini ismeretlen hibaként".
+    if (isAnyStorageError(error)) {
+      cronLog("Tárolóhiba — a generálás nem futhatott le", {
+        date,
+        reason: storageErrorReason(error),
+      });
+      throw error;
+    }
+
     if (error instanceof GenerationSkippedError) {
       const history = await readDevotionals();
       const existing = getDevotionalByDate(history, date);

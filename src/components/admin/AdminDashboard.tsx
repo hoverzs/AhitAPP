@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DevotionalContent } from "@/components/devotional/DevotionalContent";
 import { AdminDevotionalList } from "@/components/admin/AdminDevotionalList";
@@ -27,6 +27,10 @@ import type {
   Devotional,
 } from "@/lib/types";
 import type { EditableDevotionalFields } from "@/lib/devotional-fields";
+import {
+  describeStorageReasonHu,
+  type StorageErrorReason,
+} from "@/lib/storage/errors";
 import type { DevotionalMemory } from "@/lib/devotional-memory";
 import { statusLabelHu } from "@/lib/devotional-status";
 import { CopyButton } from "@/components/CopyButton";
@@ -53,6 +57,8 @@ interface AdminDashboardProps {
   initialDevotionals: Devotional[];
   storageError?: string | null;
   storageHint?: string | null;
+  storageReason?: StorageErrorReason | null;
+  storageDetail?: string | null;
 }
 
 interface ApiErrorPayload {
@@ -92,6 +98,8 @@ export function AdminDashboard({
   initialDevotionals,
   storageError: initialStorageError,
   storageHint: initialStorageHint,
+  storageReason: initialStorageReason,
+  storageDetail: initialStorageDetail,
 }: AdminDashboardProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -116,7 +124,18 @@ export function AdminDashboard({
   const [editFields, setEditFields] = useState<EditableDevotionalFields | null>(null);
   const [confirmRegenerateDay, setConfirmRegenerateDay] = useState<number | null>(null);
   const [refineDay, setRefineDay] = useState<number | null>(null);
+  const [loadingDay, setLoadingDay] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // A betöltött napok és a kiválasztott nap aktuális értéke aszinkron callbackekhez.
+  const devotionalsByDayRef = useRef(devotionalsByDay);
+  const selectedDayRef = useRef(selectedDay);
+  useEffect(() => {
+    devotionalsByDayRef.current = devotionalsByDay;
+  }, [devotionalsByDay]);
+  useEffect(() => {
+    selectedDayRef.current = selectedDay;
+  }, [selectedDay]);
 
   const geminiLoadingActive =
     loading || todayCronLoading || regenerateLoading !== null;
@@ -163,18 +182,68 @@ export function AdminDashboard({
     });
   }, []);
 
+  /**
+   * Egy nap teljes rekordja: a memóriából, vagy — „lusta" betöltéssel — a
+   * szerverről. Csak a megnyitott napot kérjük le, nem a teljes készletet.
+   */
+  const loadDay = useCallback(
+    async (dayNumber: number): Promise<Devotional | null> => {
+      const cached = devotionalsByDayRef.current.get(dayNumber);
+      if (cached) return cached;
+
+      setLoadingDay(dayNumber);
+      try {
+        const res = await fetch(`/api/admin/devotional?day=${dayNumber}`);
+        const data = (await res.json()) as ApiErrorPayload & { devotional?: Devotional };
+        if (!res.ok || !data.devotional) {
+          setError({
+            error: data.error ?? "A nap betöltése sikertelen.",
+            hint: data.hint,
+            code: data.code,
+          });
+          return null;
+        }
+        const loaded = data.devotional;
+        setDevotionalsByDay((prev) => new Map(prev).set(loaded.dayNumber, loaded));
+        return loaded;
+      } catch {
+        setError({ error: "Hálózati hiba a nap betöltése közben.", code: "NETWORK" });
+        return null;
+      } finally {
+        setLoadingDay((current) => (current === dayNumber ? null : current));
+      }
+    },
+    []
+  );
+
   const refreshFromServer = useCallback(async () => {
     const res = await fetch("/api/admin/devotionals");
     if (!res.ok) return;
     const data = (await res.json()) as {
+      lazy?: boolean;
       items: AdminDevotionalListItem[];
       devotionals: Devotional[];
     };
     setListItems(data.items);
+
+    if (data.lazy) {
+      // Lusta tároló: a már betöltött napokból csak a változatlanokat tartjuk meg.
+      const kept = new Map<number, Devotional>();
+      for (const [day, d] of devotionalsByDayRef.current) {
+        const item = data.items.find((i) => i.dayNumber === day);
+        if (item && item.updatedAt === d.updatedAt) kept.set(day, d);
+      }
+      devotionalsByDayRef.current = kept;
+      setDevotionalsByDay(kept);
+      const selected = selectedDayRef.current;
+      if (selected != null && !kept.has(selected)) void loadDay(selected);
+      return;
+    }
+
     const map = new Map<number, Devotional>();
     for (const d of data.devotionals) map.set(d.dayNumber, d);
     setDevotionalsByDay(map);
-  }, []);
+  }, [loadDay]);
 
   const scrollToPreview = useCallback(() => {
     requestAnimationFrame(() =>
@@ -191,21 +260,22 @@ export function AdminDashboard({
       setEditFields(null);
       setError(null);
       scrollToPreview();
+      void loadDay(dayNumber);
     },
-    [scrollToPreview]
+    [scrollToPreview, loadDay]
   );
 
   const enterEditMode = useCallback(
-    (dayNumber: number) => {
-      const d = devotionalsByDay.get(dayNumber);
-      if (!d) return;
+    async (dayNumber: number) => {
       setSelectedDay(dayNumber);
+      const d = await loadDay(dayNumber);
+      if (!d) return;
       setEditFields(initEditableFields(d));
       setEditMode(true);
       setError(null);
       scrollToPreview();
     },
-    [devotionalsByDay, scrollToPreview]
+    [loadDay, scrollToPreview]
   );
 
   async function handleLogout() {
@@ -280,8 +350,11 @@ export function AdminDashboard({
       }
 
       if (!res.ok || !data.success) {
-        const friendlyError =
-          data.code === "DUPLICATE_VERSE"
+        const isStorageCode =
+          data.code === "STORAGE_ERROR" || data.code === "STORAGE_NOT_CONFIGURED";
+        const friendlyError = isStorageCode
+          ? (data.error ?? "Az áhítatok tárolója nem érhető el.")
+          : data.code === "DUPLICATE_VERSE"
             ? DUPLICATE_VERSE_MESSAGE
             : data.code === "GEMINI_OVERLOAD"
             ? (data.hint ??
@@ -458,16 +531,19 @@ export function AdminDashboard({
 
   async function handleAdminAction(
     action: "save" | "save_draft" | "approve" | "publish" | "revert_draft",
-    fields?: EditableDevotionalFields
+    fields?: EditableDevotionalFields,
+    dayNumber?: number
   ) {
-    if (!preview) return;
+    // A listából indított művelet (pl. Közzététel) a nap betöltése nélkül is megy.
+    const targetDay = dayNumber ?? preview?.dayNumber;
+    if (targetDay == null) return;
 
     setActionLoading(action);
     setError(null);
 
     try {
       const body: Record<string, unknown> = {
-        dayNumber: preview.dayNumber,
+        dayNumber: targetDay,
         action,
       };
       if (fields && (action === "save" || action === "save_draft")) {
@@ -552,10 +628,13 @@ export function AdminDashboard({
       <AdminMain>
         {initialStorageError && (
           <AdminErrorAlert
-            title="Production tároló nincs beállítva"
+            title={describeStorageReasonHu(initialStorageReason ?? "unknown").title}
             message={initialStorageError}
             hint={initialStorageHint ?? undefined}
-            meta="STORAGE_NOT_CONFIGURED"
+            meta={
+              [initialStorageReason, initialStorageDetail].filter(Boolean).join(" · ") ||
+              undefined
+            }
           />
         )}
 
@@ -605,6 +684,7 @@ export function AdminDashboard({
               disabled={
                 loading ||
                 pingLoading ||
+                Boolean(initialStorageError) ||
                 target.action === "blocked" ||
                 target.action === "update"
               }
@@ -617,6 +697,14 @@ export function AdminDashboard({
           {loading && (
             <p className="mt-5 text-sm text-ink-muted" role="status" aria-live="polite">
               {geminiLoadingMessage}
+            </p>
+          )}
+
+          {initialStorageError && (
+            <p className="mt-4 text-sm text-amber-900 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-3">
+              A generálás addig nem indítható, amíg az áhítatok tárolója nem érhető el
+              (lásd a fenti hibaüzenetet). A megjelenített „{target.dayNumber}. nap” cél
+              ilyenkor nem megbízható.
             </p>
           )}
 
@@ -832,8 +920,14 @@ export function AdminDashboard({
 
         {!preview && (
           <AdminPanel title="Mai áhítat" description={todayIso}>
-            <p className="text-sm text-ink-muted font-serif italic py-4 text-center">
-              A mai napra még nincs áhítat. Készíts egyet a fenti „Új áhítat készítése” panelen.
+            <p
+              className="text-sm text-ink-muted font-serif italic py-4 text-center"
+              role="status"
+              aria-live="polite"
+            >
+              {loadingDay != null
+                ? `A(z) ${loadingDay}. nap betöltése…`
+                : "A mai napra még nincs áhítat. Készíts egyet a fenti „Új áhítat készítése” panelen."}
             </p>
           </AdminPanel>
         )}
@@ -860,10 +954,14 @@ export function AdminDashboard({
               onSelect={selectDay}
               onEdit={enterEditMode}
               onRegenerate={(day) => setConfirmRegenerateDay(day)}
-              onRefine={(day) => setRefineDay(day)}
+              onRefine={(day) => {
+                void loadDay(day).then((d) => {
+                  if (d) setRefineDay(day);
+                });
+              }}
               onPublish={(day) => {
                 selectDay(day);
-                handleAdminAction("publish");
+                handleAdminAction("publish", undefined, day);
               }}
               loadingDay={regenerateLoading}
               />
@@ -884,10 +982,14 @@ export function AdminDashboard({
               onSelect={selectDay}
               onEdit={enterEditMode}
               onRegenerate={(day) => setConfirmRegenerateDay(day)}
-              onRefine={(day) => setRefineDay(day)}
+              onRefine={(day) => {
+                void loadDay(day).then((d) => {
+                  if (d) setRefineDay(day);
+                });
+              }}
               onPublish={(day) => {
                 selectDay(day);
-                handleAdminAction("publish");
+                handleAdminAction("publish", undefined, day);
               }}
               loadingDay={regenerateLoading}
                 />
