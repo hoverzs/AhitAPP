@@ -400,7 +400,11 @@ export function AdminDashboard({
       if (data.devotional?.date) {
         selectDay(data.devotional.date);
       }
-      setToast("A mai áhítat elkészült és publikálva lett.");
+      setToast(
+        data.devotional?.status === "published"
+          ? "A mai áhítat elkészült és publikálva lett."
+          : "A mai áhítat elkészült, de még nincs publikálva."
+      );
     } catch {
       setError({
         error: "Hálózati hiba történt a generálás során.",
@@ -454,7 +458,11 @@ export function AdminDashboard({
             : d.imageUrl
               ? " · Kép mentve"
               : " · Alapértelmezett fallback kép";
-        setToast(`Generálva: ${d.date}${imageNote}`);
+        setToast(
+          d.status === "needs_review" && d.lastApiError
+            ? `Hiányos szöveg mentve ellenőrzésre (${d.date}) — nézd át, vagy generáld újra.`
+            : `Generálva: ${d.date}${imageNote}`
+        );
       }
       if (data.adminContext) {
         setContext(data.adminContext);

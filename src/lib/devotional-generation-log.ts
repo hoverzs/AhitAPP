@@ -10,6 +10,26 @@ export interface DevotionalGenerationDiagnostics {
   attempt: number;
   textComplete: boolean;
   incompleteReasons?: string[];
+  /** Gemini tokenhasználat (usageMetadata) — titkos adat nélkül. */
+  thinkingBudget?: number;
+  promptTokens?: number | null;
+  outputTokens?: number | null;
+  thoughtsTokens?: number | null;
+  totalTokens?: number | null;
+}
+
+export function usageForLog(usage?: {
+  promptTokenCount?: number;
+  candidatesTokenCount?: number;
+  thoughtsTokenCount?: number;
+  totalTokenCount?: number;
+}): Pick<DevotionalGenerationDiagnostics, "promptTokens" | "outputTokens" | "thoughtsTokens" | "totalTokens"> {
+  return {
+    promptTokens: usage?.promptTokenCount ?? null,
+    outputTokens: usage?.candidatesTokenCount ?? null,
+    thoughtsTokens: usage?.thoughtsTokenCount ?? null,
+    totalTokens: usage?.totalTokenCount ?? null,
+  };
 }
 
 const LOG_PREFIX = "[devotional-generation]";

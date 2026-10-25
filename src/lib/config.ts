@@ -7,11 +7,19 @@ export const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
 /** 1. lépés — metadata JSON (rövid) */
 export const GEMINI_METADATA_MAX_OUTPUT_TOKENS = 4096;
 
-/** 2. lépés — áhítat markdown (plain text) */
-export const GEMINI_BODY_MAX_OUTPUT_TOKENS = 2500;
+/**
+ * 2. lépés — áhítat markdown (plain text).
+ * A gemini-2.5-flash gondolkodási (thinking) tokenjei ugyanebből a keretből
+ * fogynak, ezért a keret = korlátozott thinking + a teljes szöveg + tartalék.
+ */
+export const GEMINI_BODY_MAX_OUTPUT_TOKENS = 4096;
 
-/** Retry — rövidebb prompt, magasabb token limit (lezárt szöveg). */
-export const GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS = 2500;
+/** Korlátozott gondolkodás a szöveghívásnál (nem kikapcsolva: a szövegminőségért). */
+export const GEMINI_BODY_THINKING_BUDGET = 1024;
+
+/** Retry — rövidebb prompt, kisebb gondolkodás, nagyobb kimeneti keret. */
+export const GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS = 6144;
+export const GEMINI_BODY_RETRY_THINKING_BUDGET = 256;
 
 /** Planner temperature */
 export const GEMINI_PLANNER_TEMPERATURE = 0.65;

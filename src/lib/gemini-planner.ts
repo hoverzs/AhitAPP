@@ -1,13 +1,15 @@
 import {
   GEMINI_BODY_MAX_OUTPUT_TOKENS,
   GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS,
+  GEMINI_BODY_RETRY_THINKING_BUDGET,
+  GEMINI_BODY_THINKING_BUDGET,
   GEMINI_METADATA_MAX_OUTPUT_TOKENS,
   GEMINI_PLANNER_MODEL,
   GEMINI_PLANNER_RETRY_TEMPERATURE,
   GEMINI_PLANNER_TEMPERATURE,
 } from "./config";
 import { parseTolerantDevotionalMarkdown } from "./devotional-body-parser";
-import { logDevotionalGenerationDiagnostics } from "./devotional-generation-log";
+import { logDevotionalGenerationDiagnostics, usageForLog } from "./devotional-generation-log";
 import {
   normalizeDevotionalMarkdownBody,
   stripMarkdownFences,
@@ -235,9 +237,9 @@ async function fetchMetadata(
 
 /**
  * 2. lépés: teljes áhítat plain markdown (### Elmélkedés, ima, kérdés).
- * Token limit: GEMINI_BODY_MAX_OUTPUT_TOKENS (2500).
+ * Token limit: GEMINI_BODY_MAX_OUTPUT_TOKENS (a thinking tokenek is ebből fogynak).
  */
-async function fetchDevotionalMarkdown(
+export async function fetchDevotionalMarkdown(
   metadata: DevotionalMetadata,
   memory: DevotionalMemory
 ): Promise<{
@@ -273,10 +275,13 @@ async function fetchDevotionalMarkdown(
     const maxOutputTokens = shortened
       ? GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS
       : GEMINI_BODY_MAX_OUTPUT_TOKENS;
+    const thinkingBudget = shortened
+      ? GEMINI_BODY_RETRY_THINKING_BUDGET
+      : GEMINI_BODY_THINKING_BUDGET;
     lastMaxOutputTokens = maxOutputTokens;
 
     try {
-      const { text: raw, finishReason } = await geminiGenerateContentRestDetailed({
+      const { text: raw, finishReason, usageMetadata } = await geminiGenerateContentRestDetailed({
         model: GEMINI_PLANNER_MODEL,
         systemInstruction: BODY_SYSTEM_PROMPT,
         userPrompt,
@@ -285,6 +290,7 @@ async function fetchDevotionalMarkdown(
             ? GEMINI_PLANNER_RETRY_TEMPERATURE
             : GEMINI_PLANNER_TEMPERATURE,
           maxOutputTokens,
+          thinkingConfig: { thinkingBudget },
         },
         logContext: `${BODY_SOURCE_FUNCTION}/attempt-${attempt}`,
         maxAttempts: 1,
@@ -322,6 +328,8 @@ async function fetchDevotionalMarkdown(
         attempt,
         textComplete: assessment.complete,
         incompleteReasons: assessment.reasons,
+        thinkingBudget,
+        ...usageForLog(usageMetadata),
       });
 
       if (!assessment.complete) {

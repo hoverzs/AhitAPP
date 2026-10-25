@@ -25,11 +25,20 @@ function getOutboundAgent(): Agent {
   return sharedAgent;
 }
 
+type OutboundFetchImpl = (url: string, init?: RequestInit) => Promise<Response>;
+let testOverride: OutboundFetchImpl | null = null;
+
+/** Csak tesztekhez: a kimenő HTTP hívások helyettesítése (null = vissza az igazihoz). */
+export function setOutboundFetchForTesting(impl: OutboundFetchImpl | null): void {
+  testOverride = impl;
+}
+
 /** Külső API hívások (Pexels stb.) — ugyanaz a TLS policy, mint a Gemini-nél. */
 export async function outboundFetch(
   url: string,
   init?: RequestInit
 ): Promise<Response> {
+  if (testOverride) return testOverride(url, init);
   const headers = new Headers(init?.headers);
 
   const response = await undiciFetch(url, {
