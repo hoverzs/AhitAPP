@@ -241,7 +241,11 @@ async function fetchMetadata(
  */
 export async function fetchDevotionalMarkdown(
   metadata: DevotionalMetadata,
-  memory: DevotionalMemory
+  memory: DevotionalMemory,
+  options?: {
+    /** Kiegészítő kontextus a felhasználói részben (pl. heti sorozat) — a rendszer-prompt nem változik. */
+    extraContext?: string;
+  }
 ): Promise<{
   markdown: string;
   hitMaxTokens: boolean;
@@ -270,6 +274,9 @@ export async function fetchDevotionalMarkdown(
 
     const userPrompt =
       buildBodyUserPrompt(metadata, { shortened }) +
+      (options?.extraContext ? `
+
+${options.extraContext}` : "") +
       (shortened ? BODY_SHORT_RETRY_SUFFIX : "");
 
     const maxOutputTokens = shortened

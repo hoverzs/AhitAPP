@@ -55,6 +55,11 @@ export interface WeeklyPlan {
   createdAt: string;
   updatedAt: string;
   approvedAt?: string;
+  /**
+   * Szerkesztői döntés: azok a napok (dátumok), ahol a 90 napon belül már
+   * használt igehely tudatosan megmarad. A terven belüli ismétlést ez nem oldja fel.
+   */
+  repeatOverrides?: string[];
   /** Elküldött értesítések (fajta → időpont), hogy ugyanazt ne küldjük újra. */
   notifiedAt?: Record<string, string>;
 }
@@ -161,6 +166,13 @@ export function validateWeeklyPlanStructure(plan: WeeklyPlan): string[] {
     errors.push("A téma és az ív szöveg kell legyen.");
   }
 
+  if (
+    plan.repeatOverrides !== undefined &&
+    (!Array.isArray(plan.repeatOverrides) || plan.repeatOverrides.some((d) => typeof d !== "string"))
+  ) {
+    errors.push("A repeatOverrides dátumok listája kell legyen.");
+  }
+
   const expected = getWeekDates(plan.weekId);
   if (!Array.isArray(plan.days) || plan.days.length !== WEEK_LENGTH) {
     errors.push(`A tervnek pontosan ${WEEK_LENGTH} napot kell tartalmaznia.`);
@@ -241,10 +253,11 @@ export function planApprovalIssues(plan: WeeklyPlan, registry: PlanRegistry): Pl
   for (const c of conflicts.internal) {
     errors.push(`${c.date}: az igehely (${c.verse}) ugyanaz, mint ${c.sameAs} napján.`);
   }
+  const overrides = new Set(plan.repeatOverrides ?? []);
   for (const c of conflicts.registry) {
-    errors.push(
-      `${c.date}: az igehely (${c.verse}) már szerepelt ${c.previous.date} napján („${c.previous.title}”).`
-    );
+    const message = `${c.date}: az igehely (${c.verse}) már szerepelt ${c.previous.date} napján („${c.previous.title}”).`;
+    if (overrides.has(c.date)) warnings.push(`${message} (Szerkesztői döntéssel megtartva.)`);
+    else errors.push(message);
   }
   return { errors, warnings };
 }

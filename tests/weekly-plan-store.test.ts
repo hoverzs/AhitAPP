@@ -196,3 +196,14 @@ test("a Redis meghajtón a heti terv nem érhető el", () => {
     else process.env.STORAGE_DRIVER = previous;
   }
 });
+
+test("terv: az updatedAt minden mentésnél szigorúan nő, azonos ezredmásodpercben is", async () => {
+  const { store: s } = store();
+  const created = await s.createPlan(plan());
+  let previous = created.updatedAt;
+  for (let i = 0; i < 5; i++) {
+    const next = await s.updatePlan(WEEK, (p) => ({ ...p, theme: `Téma ${i}` }));
+    assert.ok(next.updatedAt > previous, `${next.updatedAt} > ${previous}`);
+    previous = next.updatedAt;
+  }
+});

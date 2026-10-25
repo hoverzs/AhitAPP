@@ -94,7 +94,12 @@ export function createWeeklyPlanStore(
     }
     const issues = validateWeeklyPlanStructure(next);
     if (issues.length > 0) throw new WeeklyPlanValidationError(issues);
-    const stamp = now().toISOString();
+    // Az updatedAt az ütközés-észlelés verziója: minden mentésnél szigorúan nő,
+    // akkor is, ha két mentés ugyanabba a ezredmásodpercbe esik.
+    let stamp = now().toISOString();
+    if (current && stamp <= current.updatedAt) {
+      stamp = new Date(Date.parse(current.updatedAt) + 1).toISOString();
+    }
     return {
       ...next,
       version: WEEKLY_PLAN_VERSION,

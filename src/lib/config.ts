@@ -21,6 +21,12 @@ export const GEMINI_BODY_THINKING_BUDGET = 1024;
 export const GEMINI_BODY_RETRY_MAX_OUTPUT_TOKENS = 6144;
 export const GEMINI_BODY_RETRY_THINKING_BUDGET = 256;
 
+/** Heti terv (JSON, 7 nap): kimeneti keret és korlátozott gondolkodás. */
+export const GEMINI_WEEK_PLAN_MAX_OUTPUT_TOKENS = 8192;
+export const GEMINI_WEEK_PLAN_RETRY_MAX_OUTPUT_TOKENS = 12288;
+export const GEMINI_WEEK_PLAN_THINKING_BUDGET = 1024;
+export const GEMINI_WEEK_PLAN_RETRY_THINKING_BUDGET = 256;
+
 /** Planner temperature */
 export const GEMINI_PLANNER_TEMPERATURE = 0.65;
 

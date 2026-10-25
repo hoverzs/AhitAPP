@@ -117,7 +117,7 @@ async function runGeminiForTarget(
   return planned;
 }
 
-async function buildDevotionalFromPlan(
+export async function buildDevotionalFromPlan(
   planned: DynamicPlannedDay,
   target: GenerationTarget,
   options?: { existing?: Devotional; versionHistory?: Devotional["versionHistory"] }
