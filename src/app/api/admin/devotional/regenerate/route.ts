@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidIsoDate } from "@/lib/app-date";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
 import {
@@ -22,20 +23,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   }
 
-  let body: { dayNumber?: number; backup?: boolean };
+  let body: { date?: string; backup?: boolean };
   try {
-    body = (await request.json()) as { dayNumber?: number; backup?: boolean };
+    body = (await request.json()) as { date?: string; backup?: boolean };
   } catch {
     return NextResponse.json({ error: "Érvénytelen JSON." }, { status: 400 });
   }
 
-  const dayNumber = body.dayNumber;
-  if (!Number.isFinite(dayNumber) || (dayNumber ?? 0) < 1) {
-    return NextResponse.json({ error: "Érvénytelen dayNumber." }, { status: 400 });
+  const date = body.date;
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   try {
-    const result = await regenerateDevotional(dayNumber!, {
+    const result = await regenerateDevotional(date, {
       backup: body.backup !== false,
     });
 

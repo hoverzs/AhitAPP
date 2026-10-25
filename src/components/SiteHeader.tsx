@@ -37,7 +37,7 @@ function HeroBackground() {
 export function SiteHeader({ todayHref }: SiteHeaderProps) {
   const pathname = usePathname();
   const isHome = pathname === "/";
-  const isToday = pathname.startsWith("/nap/") || pathname === "/mai";
+  const isToday = pathname === "/mai";
 
   return (
     <>

@@ -68,7 +68,7 @@ export function AdminDevotionalRefineModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dayNumber: devotional.dayNumber,
+          date: devotional.date,
           instruction: instruction.trim(),
           updateImageKeywords,
         }),
@@ -109,7 +109,7 @@ export function AdminDevotionalRefineModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dayNumber: devotional.dayNumber,
+          date: devotional.date,
           instruction: instruction.trim(),
           refined,
           statusAfter,
@@ -144,7 +144,7 @@ export function AdminDevotionalRefineModal({
   return (
     <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
       <AdminPanel
-        title={`AI finomítás — ${devotional.dayNumber}. nap`}
+        title={`AI finomítás — ${devotional.date}`}
         className="admin-modal admin-refine-modal w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
       >
         <p className="text-sm text-ink-muted leading-relaxed -mt-2 mb-4">

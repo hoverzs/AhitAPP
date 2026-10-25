@@ -25,12 +25,11 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function devotional(dayNumber: number, date: string, overrides: Partial<Devotional> = {}): Devotional {
+function devotional(n: number, date: string, overrides: Partial<Devotional> = {}): Devotional {
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: `## Tartalom\n\nSzöveg ${date}`,
     imageUrl: "",
     createdAt: `${date}T08:00:00.000Z`,
@@ -63,11 +62,11 @@ test("a Blob-meghajtó csak kifejezett STORAGE_DRIVER=blob esetén kapcsol be", 
 test("a meghajtó lusta admin-képességekkel rendelkezik", () => {
   const storage = getDevotionalStorage();
   assert.equal(typeof storage.listAdminEntries, "function");
-  assert.equal(typeof storage.getDevotionalByDayNumber, "function");
+  assert.equal(typeof storage.getDevotionalsFromDate, "function");
 });
 
 test("alkalmazásréteg: mentés, nyilvános ablak, lusta admin és módosítások", async () => {
-  const { appendDevotional, getPublicWindowDevotionals, getDevotionalByDay, updateDevotionalStatus, saveDevotionalAdminEdit, upsertDevotional } =
+  const { appendDevotional, getPublicWindowDevotionals, getDevotionalByDate, updateDevotionalStatus, saveDevotionalAdminEdit, upsertDevotional } =
     await import("../src/lib/devotionals");
   const { loadAdminPageData } = await import("../src/lib/app-data");
 
@@ -79,7 +78,7 @@ test("alkalmazásréteg: mentés, nyilvános ablak, lusta admin és módosítás
   // Nyilvános: csak a közzétett, ablakon belüli napok — egyetlen olvasás a pillanatképből.
   client.resetOps();
   const publicWindow = await getPublicWindowDevotionals();
-  assert.deepEqual(publicWindow.map((d) => d.dayNumber), [2, 1]);
+  assert.deepEqual(publicWindow.map((d) => d.title), ["Cím 2", "Cím 1"]);
   assert.equal(client.ops.simple, 1);
   assert.equal(client.ops.advanced, 0);
 
@@ -87,34 +86,30 @@ test("alkalmazásréteg: mentés, nyilvános ablak, lusta admin és módosítás
   client.resetOps();
   const admin = await loadAdminPageData();
   assert.equal(admin.storageError, null);
-  assert.deepEqual(admin.listItems.map((i) => i.dayNumber), [4, 3, 2, 1]);
-  assert.deepEqual(admin.devotionals.map((d) => d.dayNumber), [3]); // csak a mai nap rekordja
-  assert.equal(admin.reviewDevotional?.dayNumber, 3);
+  assert.deepEqual(admin.listItems.map((i) => i.title), ["Cím 4", "Cím 3", "Cím 2", "Cím 1"]);
+  assert.deepEqual(admin.devotionals.map((d) => d.title), ["Cím 3"]); // csak a mai nap rekordja
+  assert.equal(admin.reviewDevotional?.date, today);
   assert.equal(client.ops.advanced, 0);
   assert.ok(client.ops.simple <= 6, `admin olvasások: ${client.ops.simple}`);
   assert.equal(admin.adminContext.generationTarget.action, "update"); // a mai napra már van piszkozat
 
-  // Napszám szerinti keresés index + egy rekord.
+  // Dátum szerinti keresés: egyetlen rekord-olvasás.
   client.resetOps();
-  assert.equal((await getDevotionalByDay(2))?.title, "Cím 2");
-  assert.equal(client.ops.simple, 2);
+  assert.equal((await getDevotionalByDate(addDays(today, -1)))?.title, "Cím 2");
+  assert.equal(client.ops.simple, 1);
 
   // Közzététel: a pillanatkép azonnal frissül, a teljes készlet olvasása nélkül.
   client.resetOps();
-  const published = await updateDevotionalStatus(3, "published");
+  const published = await updateDevotionalStatus(today, "published");
   assert.equal(published.status, "published");
   assert.ok(client.ops.simple <= 8, `közzététel olvasásai: ${client.ops.simple}`);
-  assert.deepEqual((await getPublicWindowDevotionals()).map((d) => d.dayNumber), [3, 2, 1]);
+  assert.deepEqual((await getPublicWindowDevotionals()).map((d) => d.title), ["Cím 3", "Cím 2", "Cím 1"]);
 
-  // Szerkesztés és upsert ugyanazon a napszámon.
-  await saveDevotionalAdminEdit(3, { title: "Szerkesztett cím" });
-  assert.equal((await getDevotionalByDay(3))?.title, "Szerkesztett cím");
+  // Szerkesztés és upsert ugyanazon a dátumon.
+  await saveDevotionalAdminEdit(today, { title: "Szerkesztett cím" });
+  assert.equal((await getDevotionalByDate(today))?.title, "Szerkesztett cím");
   await upsertDevotional({ ...devotional(3, today), title: "Upsert cím" });
-  assert.equal((await getDevotionalByDay(3))?.title, "Upsert cím");
-  assert.equal(
-    getDevotionalStorage().getDevotionalByDayNumber ? true : false,
-    true
-  );
+  assert.equal((await getDevotionalByDate(today))?.title, "Upsert cím");
 });
 
 test("a generálási feladat a Blobba kerül (jobs/<dátum>.json)", async () => {

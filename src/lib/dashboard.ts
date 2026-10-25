@@ -12,21 +12,9 @@ export function getLatestDevotional(
   );
   if (forToday) return forToday;
 
-  return [...devotionals].sort((a, b) => b.dayNumber - a.dayNumber)[0];
-}
-
-export function getRecentDevotionals(
-  devotionals: Devotional[],
-  limit = 3
-): Devotional[] {
-  return [...devotionals]
-    .sort((a, b) => {
-      const da = a.date ?? a.createdAt.slice(0, 10);
-      const db = b.date ?? b.createdAt.slice(0, 10);
-      if (da !== db) return db.localeCompare(da);
-      return b.dayNumber - a.dayNumber;
-    })
-    .slice(0, limit);
+  return [...devotionals].sort((a, b) =>
+    (b.date ?? b.createdAt.slice(0, 10)).localeCompare(a.date ?? a.createdAt.slice(0, 10))
+  )[0];
 }
 
 export function formatShortDate(iso: string): string {

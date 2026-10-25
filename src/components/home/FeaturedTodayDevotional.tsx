@@ -61,7 +61,7 @@ export function FeaturedTodayDevotional({
         <DevotionalArticleLayout
           content={devotional.content}
           verse={devotional.verse}
-          dayNumber={devotional.dayNumber}
+          date={devotional.date}
           title={devotional.title}
           category={devotional.category}
           imageUrl={devotional.imageUrl}

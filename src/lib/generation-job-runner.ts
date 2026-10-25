@@ -114,7 +114,6 @@ export async function ensureDevotionalNotAlreadyPublished(
 
   jobLog("Már létezik áhítat — duplikáció elkerülve", {
     date,
-    dayNumber: existing.dayNumber,
     title: existing.title,
   });
 
@@ -123,7 +122,7 @@ export async function ensureDevotionalNotAlreadyPublished(
       at: new Date().toISOString(),
       phase: resolveAttemptPhase(job),
       success: true,
-      message: `Már publikálva: ${existing.dayNumber}. nap`,
+      message: `Már publikálva: ${existing.date}`,
     });
     await markJobPublished(
       job,
@@ -223,14 +222,14 @@ export async function runGenerationAttempt(
       at: publishedAt,
       phase,
       success: true,
-      message: `Sikeres: ${result.devotional.dayNumber}. nap — „${result.devotional.title}”`,
+      message: `Sikeres: ${result.devotional.date} — „${result.devotional.title}”`,
     });
 
     await markJobPublished(job, publishedAt);
 
     jobLog("Sikeres generálás és közzététel", {
       date,
-      dayNumber: result.devotional.dayNumber,
+      title: result.devotional.title,
       attempt: job.retry_count,
     });
 

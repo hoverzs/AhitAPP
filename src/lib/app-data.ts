@@ -102,7 +102,7 @@ export async function loadSiteNavData(): Promise<{
     const devotionals = await getPublicWindowDevotionals();
     const latest = devotionals[0];
     return {
-      todayHref: latest ? `/nap/${latest.dayNumber}` : "/",
+      todayHref: latest ? `/devotional/${devotionalDateKey(latest)}` : "/",
       publishedCount: devotionals.length,
     };
   } catch {
@@ -153,7 +153,6 @@ export async function buildAdminDevotionalContext(
     model: GEMINI_PLANNER_MODEL,
     generationTarget: {
       action: target.action,
-      dayNumber: target.dayNumber,
       date: target.date,
       blockedReason: target.blockedReason,
     },
@@ -170,9 +169,8 @@ export async function buildAdminDevotionalContext(
 export function toAdminListItems(devotionals: Devotional[]): AdminDevotionalListItem[] {
   return [...devotionals]
     .map(normalizeDevotional)
-    .sort((a, b) => b.dayNumber - a.dayNumber)
+    .sort((a, b) => b.date.localeCompare(a.date))
     .map((d) => ({
-      dayNumber: d.dayNumber,
       date: d.date,
       title: d.title,
       verse: d.verse,
@@ -222,7 +220,7 @@ async function loadLazyAdminPageData(): Promise<AdminPageData> {
   const target = resolveManualGenerationTarget(stubs);
   // A rekordok törlése után is megmaradó előzmény (meta) kiegészíti a csonkokét.
   const memory = mergeStoredMetaIntoMemory(
-    buildDevotionalMemory(stubs, { nextDayNumber: target.dayNumber }),
+    buildDevotionalMemory(stubs, { targetDate: target.date }),
     meta
   );
 
@@ -267,7 +265,7 @@ export async function loadAdminPageData(): Promise<AdminPageData> {
   if (storageError) {
     const emptyCtx = await buildAdminDevotionalContext([]);
     return {
-      memory: buildDevotionalMemory([]),
+      memory: buildDevotionalMemory([], { targetDate: getAppTodayIso() }),
       latest: null,
       reviewDevotional: null,
       adminContext: emptyCtx,
@@ -292,7 +290,7 @@ export async function loadAdminPageData(): Promise<AdminPageData> {
       getLatestDevotional(devotionals);
 
     const memory = buildDevotionalMemory(raw, {
-      nextDayNumber: resolveManualGenerationTarget(devotionals).dayNumber,
+      targetDate: resolveManualGenerationTarget(devotionals).date,
     });
 
     return {
@@ -311,7 +309,7 @@ export async function loadAdminPageData(): Promise<AdminPageData> {
     console.error("[loadAdminPageData]", error);
     const emptyCtx = await buildAdminDevotionalContext([]);
     return {
-      memory: buildDevotionalMemory([]),
+      memory: buildDevotionalMemory([], { targetDate: getAppTodayIso() }),
       latest: null,
       reviewDevotional: null,
       adminContext: emptyCtx,

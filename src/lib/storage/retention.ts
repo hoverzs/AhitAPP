@@ -78,12 +78,9 @@ export function planRetention(
   const retentionDays = getRetentionDays();
   const cutoff = getRetentionCutoffDate(referenceDate);
   const sorted = [...dates].sort();
-  // A legfrissebb áhítat mindig megmarad (a napszámozás max(dayNumber)+1 alapú,
-  // és hosszú kihagyás után sem üresedhet ki a tároló).
-  const newest = [...sorted].reverse().find((d) => ISO_DATE_RE.test(d));
-  const remove = sorted.filter(
-    (d) => d !== newest && !isDateWithinRetention(d, referenceDate)
-  );
+  // Nincs napszámozás, ezért nincs „mindig megmaradó" legfrissebb rekord:
+  // minden, a határnál régebbi (dátum szerint) közzétett nap törlendő.
+  const remove = sorted.filter((d) => !isDateWithinRetention(d, referenceDate));
   const removeSet = new Set(remove);
   return {
     referenceDate,

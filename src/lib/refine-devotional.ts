@@ -2,7 +2,7 @@ import { extractPrayerAndReflection } from "./devotional-fields";
 import { appendVersionSnapshot } from "./devotional-versions";
 import { refineDevotionalWithGemini } from "./gemini-refine";
 import { REFINE_PROMPT_VERSION } from "./prompts/devotional-refine-prompt";
-import { getDevotionalByDay, upsertDevotional } from "./devotionals";
+import { getDevotionalByDate, upsertDevotional } from "./devotionals";
 import type {
   Devotional,
   DevotionalRefinementResult,
@@ -15,18 +15,18 @@ export interface RefinePreviewResult {
   refined: DevotionalRefinementResult;
   original: Pick<
     Devotional,
-    "dayNumber" | "title" | "verse" | "content" | "category" | "facebookCopy"
+    "date" | "title" | "verse" | "content" | "category" | "facebookCopy"
   >;
 }
 
 export async function previewDevotionalRefinement(
-  dayNumber: number,
+  date: string,
   instruction: string,
   options?: { updateImageKeywords?: boolean }
 ): Promise<RefinePreviewResult> {
-  const existing = await getDevotionalByDay(dayNumber);
+  const existing = await getDevotionalByDate(date);
   if (!existing) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
+    throw new Error(`A(z) ${date} napi áhítat nem található.`);
   }
 
   const refined = await refineDevotionalWithGemini(existing, instruction, options);
@@ -34,7 +34,7 @@ export async function previewDevotionalRefinement(
   return {
     refined,
     original: {
-      dayNumber: existing.dayNumber,
+      date: existing.date,
       title: existing.title,
       verse: existing.verse,
       content: existing.content,
@@ -45,7 +45,7 @@ export async function previewDevotionalRefinement(
 }
 
 export async function applyDevotionalRefinement(
-  dayNumber: number,
+  date: string,
   refined: DevotionalRefinementResult,
   options: {
     instruction: string;
@@ -53,9 +53,9 @@ export async function applyDevotionalRefinement(
     updateImageKeywords?: boolean;
   }
 ): Promise<Devotional> {
-  const existing = await getDevotionalByDay(dayNumber);
+  const existing = await getDevotionalByDate(date);
   if (!existing) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
+    throw new Error(`A(z) ${date} napi áhítat nem található.`);
   }
 
   if (!options.instruction.trim()) {

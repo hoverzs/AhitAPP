@@ -117,26 +117,15 @@ export async function writeDevotionals(devotionals: Devotional[]): Promise<void>
 }
 
 /**
- * Napszám szerinti keresés. Ha a tároló tudja (Blob: index + egyetlen rekord),
- * nem olvassa be a teljes készletet.
+ * Egy nap teljes rekordja (admin / generálás). A tároló közvetlenül a dátumhoz
+ * tartozó rekordot olvassa, nem a teljes készletet.
  */
-async function findByDayNumber(dayNumber: number): Promise<Devotional | undefined> {
-  const storage = getDevotionalStorage();
-  if (storage.getDevotionalByDayNumber) {
-    return storage.getDevotionalByDayNumber(dayNumber);
-  }
-  const all = await storage.getLatestDevotionals();
-  return all.find((d) => d.dayNumber === dayNumber);
-}
-
-export async function getDevotionalByDay(
-  dayNumber: number
-): Promise<Devotional | undefined> {
+export async function getDevotionalByDate(date: string): Promise<Devotional | undefined> {
   try {
-    return await findByDayNumber(dayNumber);
+    return await getDevotionalStorage().getDevotionalByDate(date);
   } catch (error) {
     if (isProductionStorageNotConfiguredError(error)) {
-      console.error("[getDevotionalByDay]", STORAGE_NOT_CONFIGURED_HU);
+      console.error("[getDevotionalByDate]", STORAGE_NOT_CONFIGURED_HU);
       return undefined;
     }
     throw error;
@@ -228,22 +217,15 @@ export async function getPublicWindowDevotionals(): Promise<Devotional[]> {
   }
 }
 
-export async function getPublicDevotionalByDay(
-  dayNumber: number
-): Promise<Devotional | undefined> {
-  const window = await getPublicWindowDevotionals();
-  return window.find((d) => d.dayNumber === dayNumber);
-}
-
 export type PublicDevotionalLookup =
   | { kind: "found"; devotional: Devotional }
   | { kind: "expired" }
   | { kind: "missing" };
 
 /**
- * Dátum szerinti nyilvános keresés. Az ablakon kívüli dátum lejárt" (nem
+ * Dátum szerinti nyilvános keresés. Az ablakon kívüli dátum „lejárt” (nem
  * kérdezünk le semmit a tárolóból), az ablakon belüli, de nem közzétett vagy
- * hiányzó dátum missing".
+ * hiányzó dátum „hiányzó”.
  */
 export async function lookupPublicDevotionalByDate(
   date: string
@@ -256,8 +238,8 @@ export async function lookupPublicDevotionalByDate(
 }
 
 /**
- * Admin munkakészlet: mai nap, jövőbeli és az elmúlt 7 nap rekordjai (+ a
- * legnagyobb napszámú rekord)  nem a teljes tár. Piszkozatokkal együtt.
+ * Admin munkakészlet: mai nap, jövőbeli és az elmúlt 7 nap rekordjai — nem a
+ * teljes tár. Piszkozatokkal együtt.
  */
 export async function readAdminWorkingSet(): Promise<ReadDevotionalsResult> {
   const driver = resolveStorageDriver();
@@ -285,7 +267,7 @@ export async function appendDevotional(entry: Devotional): Promise<Devotional> {
 export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
   const storage = getDevotionalStorage();
   const normalized = normalizeDevotional(entry);
-  const existing = await findByDayNumber(normalized.dayNumber);
+  const existing = await storage.getDevotionalByDate(devotionalDateKey(normalized));
 
   if (existing) {
     const saved = await storage.updateDevotional(devotionalDateKey(existing), normalized);
@@ -296,18 +278,17 @@ export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
   return storage.saveDevotional(normalized);
 }
 
-async function patchDevotionalByDay(
-  dayNumber: number,
+async function patchDevotionalByDate(
+  date: string,
   patch: Partial<Devotional>
 ): Promise<Devotional> {
   const storage = getDevotionalStorage();
-  const existing = await findByDayNumber(dayNumber);
+  const existing = await storage.getDevotionalByDate(date);
 
   if (!existing) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
+    throw new Error(`A(z) ${date} napi áhítat nem található.`);
   }
 
-  const date = devotionalDateKey(existing);
   const updated = normalizeDevotional({ ...existing, ...patch });
   const saved = await storage.updateDevotional(date, updated);
   await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
@@ -315,15 +296,15 @@ async function patchDevotionalByDay(
 }
 
 export async function updateDevotionalStatus(
-  dayNumber: number,
+  date: string,
   status: DevotionalStatus
 ): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, { status, updatedAt: now });
+  return patchDevotionalByDate(date, { status, updatedAt: now });
 }
 
 export async function saveDevotionalAdminEdit(
-  dayNumber: number,
+  date: string,
   patch: Partial<
     Pick<
       Devotional,
@@ -339,7 +320,7 @@ export async function saveDevotionalAdminEdit(
   >
 ): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     ...patch,
     editedByAdmin: true,
     updatedAt: now,
@@ -348,7 +329,7 @@ export async function saveDevotionalAdminEdit(
 }
 
 export async function saveDevotionalDraft(
-  dayNumber: number,
+  date: string,
   patch: Partial<
     Pick<
       Devotional,
@@ -363,7 +344,7 @@ export async function saveDevotionalDraft(
   >
 ): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     ...patch,
     status: "draft",
     editedByAdmin: true,
@@ -380,7 +361,7 @@ export interface DevotionalPexelsImagePatch {
 }
 
 export async function saveDevotionalPexelsImage(
-  dayNumber: number,
+  date: string,
   image: DevotionalPexelsImagePatch,
   options?: { source?: "pexels" | "pexels_auto" }
 ): Promise<Devotional> {
@@ -389,7 +370,7 @@ export async function saveDevotionalPexelsImage(
   }
 
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     imageUrl: image.imageUrl.trim(),
     imageSource: options?.source ?? "pexels",
     imageCredit: image.imageCredit.trim(),
@@ -400,9 +381,9 @@ export async function saveDevotionalPexelsImage(
   });
 }
 
-export async function clearDevotionalImage(dayNumber: number): Promise<Devotional> {
+export async function clearDevotionalImage(date: string): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     imageUrl: "",
     imageSource: undefined,
     imageCredit: undefined,
@@ -414,7 +395,7 @@ export async function clearDevotionalImage(dayNumber: number): Promise<Devotiona
 }
 
 export async function saveDevotionalManualImage(
-  dayNumber: number,
+  date: string,
   imageUrl: string,
   options?: { imageCredit?: string }
 ): Promise<Devotional> {
@@ -427,7 +408,7 @@ export async function saveDevotionalManualImage(
   }
 
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     imageUrl: url,
     imageSource: "manual",
     imageCredit: options?.imageCredit?.trim() || "Feltöltött kép",
@@ -439,11 +420,11 @@ export async function saveDevotionalManualImage(
 }
 
 export async function saveDevotionalImageKeywords(
-  dayNumber: number,
+  date: string,
   imageKeywords: string
 ): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDay(dayNumber, {
+  return patchDevotionalByDate(date, {
     imageKeywords: imageKeywords.trim(),
     editedByAdmin: true,
     updatedAt: now,

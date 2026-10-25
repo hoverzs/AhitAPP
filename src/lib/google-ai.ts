@@ -18,7 +18,7 @@ import type { GeneratedDevotionalContent } from "./types";
 
 /** Legacy SDK — csak szöveg (text-only generateContent). */
 export async function generateDevotionalText(
-  dayNumber: number,
+  date: string,
   verseText: string
 ): Promise<GeneratedDevotionalContent> {
   const model = createGeminiClient().getGenerativeModel({
@@ -31,7 +31,7 @@ export async function generateDevotionalText(
   });
 
   try {
-    const result = await model.generateContent(buildUserPrompt(verseText, dayNumber));
+    const result = await model.generateContent(buildUserPrompt(verseText, date));
     const raw = result.response.text();
 
     if (!raw?.trim()) {
@@ -67,7 +67,7 @@ interface ImagenResponse {
  * Jelenleg kikapcsolva: üres imageUrl, nincs API hívás.
  */
 export async function generateAndSaveImage(
-  dayNumber: number,
+  date: string,
   verseText: string,
   imagePromptSubject: string
 ): Promise<string> {
@@ -118,7 +118,7 @@ export async function generateAndSaveImage(
   const imagesDir = path.join(process.cwd(), "public", "images", "devotionals");
   await fs.mkdir(imagesDir, { recursive: true });
 
-  const filename = `day-${dayNumber}.png`;
+  const filename = `${date}.png`;
   const filePath = path.join(imagesDir, filename);
   await fs.writeFile(filePath, buffer);
 

@@ -14,8 +14,6 @@ export function isValidDevotional(entry: unknown): entry is Devotional {
     (typeof d.status === "string" && isDevotionalStatus(d.status));
 
   return (
-    typeof d.dayNumber === "number" &&
-    d.dayNumber >= 1 &&
     typeof d.title === "string" &&
     typeof d.verse === "string" &&
     typeof d.content === "string" &&
@@ -48,5 +46,7 @@ export function parseDevotionalList(raw: unknown): Devotional[] {
 }
 
 export function sortDevotionals(devotionals: Devotional[]): Devotional[] {
-  return [...devotionals].sort((a, b) => a.dayNumber - b.dayNumber);
+  return [...devotionals].sort((a, b) =>
+    devotionalDateKey(a).localeCompare(devotionalDateKey(b))
+  );
 }

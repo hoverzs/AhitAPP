@@ -37,7 +37,6 @@ export interface MigrationPlan {
   /** Régi, de nem közzétett (piszkozat / jóváhagyott) napok — ezek átkerülnek. */
   oldUnpublishedKept: string[];
   newestDate: string | null;
-  maxDayNumber: number;
   /** A teljes előzményből épített, a törölt napok emlékezetét őrző meta. */
   meta: MetaExtra;
   warnings: string[];
@@ -45,23 +44,23 @@ export interface MigrationPlan {
 
 const RECENT_DAYS_LIMIT = 21;
 
-/** A teljes előzményből a meta (használt igehelyek, címek, kategóriák, napszám). */
+/** A teljes előzményből a meta (használt igehelyek, címek, kategóriák). */
 export function buildMigrationMeta(records: Devotional[]): MetaExtra {
-  const sorted = [...records].sort((a, b) => a.dayNumber - b.dayNumber);
+  const sorted = [...records].sort((a, b) =>
+    devotionalDateKey(a).localeCompare(devotionalDateKey(b))
+  );
   const unique = (values: (string | undefined)[]) => [
     ...new Set(values.filter((v): v is string => Boolean(v && v.trim()))),
   ];
 
   const recentDays: HistoricalDayEntry[] = sorted.slice(-RECENT_DAYS_LIMIT).map((d) => ({
-    dayNumber: d.dayNumber,
+    date: devotionalDateKey(d),
     title: d.title,
     verseReference: extractVerseReference(d.verse),
     category: d.category ?? "—",
-    createdAt: d.createdAt,
   }));
 
   return {
-    maxDayNumber: sorted.length ? sorted[sorted.length - 1].dayNumber : 0,
     usedVerseReferences: unique(sorted.map((d) => extractVerseReference(d.verse))),
     usedTitles: unique(sorted.map((d) => d.title)),
     usedCategories: unique(sorted.map((d) => d.category)),
@@ -74,13 +73,10 @@ export function planMigration(rawRecords: Devotional[], today: string): Migratio
   const warnings: string[] = [];
 
   const byDate = new Map<string, Devotional>();
-  const days = new Set<number>();
   for (const d of records) {
     const date = devotionalDateKey(d);
     if (byDate.has(date)) warnings.push(`Duplikált dátum a forrásban: ${date} — az utolsó marad.`);
     byDate.set(date, d);
-    if (days.has(d.dayNumber)) warnings.push(`Duplikált napszám a forrásban: ${d.dayNumber}.`);
-    days.add(d.dayNumber);
   }
 
   const unique = [...byDate.values()];
@@ -106,7 +102,7 @@ export function planMigration(rawRecords: Devotional[], today: string): Migratio
     toImport.push(d);
   }
 
-  toImport.sort((a, b) => a.dayNumber - b.dayNumber);
+  toImport.sort((a, b) => devotionalDateKey(a).localeCompare(devotionalDateKey(b)));
   skippedOldPublished.sort();
   oldUnpublishedKept.sort();
 
@@ -118,7 +114,9 @@ export function planMigration(rawRecords: Devotional[], today: string): Migratio
     }
   }
 
-  const newest = [...unique].sort((a, b) => b.dayNumber - a.dayNumber)[0];
+  const newest = [...unique].sort((a, b) =>
+    devotionalDateKey(b).localeCompare(devotionalDateKey(a))
+  )[0];
 
   return {
     referenceDate: today,
@@ -128,7 +126,6 @@ export function planMigration(rawRecords: Devotional[], today: string): Migratio
     skippedOldPublished,
     oldUnpublishedKept,
     newestDate: newest ? devotionalDateKey(newest) : null,
-    maxDayNumber: newest?.dayNumber ?? 0,
     meta: buildMigrationMeta(unique),
     warnings,
   };
@@ -210,7 +207,7 @@ export async function verifyImport(
       mismatches.push(`${date}: nincs rekord`);
       continue;
     }
-    for (const field of ["dayNumber", "title", "verse", "content", "status", "imageUrl"] as const) {
+    for (const field of ["title", "verse", "content", "status", "imageUrl"] as const) {
       if (stored[field] !== source[field]) mismatches.push(`${date}: eltér a(z) ${field}`);
     }
   }
@@ -241,12 +238,11 @@ export async function verifyImport(
 
   const meta = await storage.getMeta();
   add(
-    "meta: napszám és használt igehelyek megvannak",
+    "meta: használt igehelyek megvannak",
     Boolean(meta) &&
-      (meta?.maxDayNumber ?? 0) >= plan.maxDayNumber &&
       (plan.meta.usedVerseReferences ?? []).every((v) => meta?.usedVerseReferences.includes(v)),
     meta
-      ? `maxDayNumber ${meta.maxDayNumber} (várt ≥ ${plan.maxDayNumber}), igehelyek ${meta.usedVerseReferences.length}/${plan.meta.usedVerseReferences?.length ?? 0}`
+      ? `igehelyek ${meta.usedVerseReferences.length}/${plan.meta.usedVerseReferences?.length ?? 0}`
       : "nincs meta"
   );
 

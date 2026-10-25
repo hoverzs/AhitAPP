@@ -8,7 +8,7 @@ const links = [
   {
     href: "/mai",
     label: "Mai nap",
-    match: (p: string) => p.startsWith("/nap/") || p === "/mai",
+    match: (p: string) => p === "/mai",
   },
   { href: "/#elmult-napok", label: "Elmúlt napok", match: () => false },
 ] as const;

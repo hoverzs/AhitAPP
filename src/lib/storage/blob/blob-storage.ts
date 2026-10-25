@@ -55,12 +55,11 @@ interface WindowDoc {
 }
 
 /**
- * A rekordok törlése után is megmaradó, kis előzmény: a napszámozáshoz és a
- * generálás ismétlés-védelméhez (devotional-memory.ts).
+ * A rekordok törlése után is megmaradó, kis előzmény a generálás
+ * ismétlés-védelméhez (devotional-memory.ts). Napszámot nem tárol.
  */
 export interface StorageMeta {
   version: 1;
-  maxDayNumber: number;
   usedVerseReferences: string[];
   usedTitles: string[];
   usedCategories: string[];
@@ -69,7 +68,6 @@ export interface StorageMeta {
 
 /** A metába beolvasztható külső előzmény (minden mező opcionális). */
 export interface MetaExtra {
-  maxDayNumber?: number;
   usedVerseReferences?: string[];
   usedTitles?: string[];
   usedCategories?: string[];
@@ -96,7 +94,6 @@ export interface BlobDevotionalStorage extends DevotionalStorage {
   getPublicWindowDevotionals(): Promise<Devotional[] | null>;
   getMeta(): Promise<StorageMeta | null>;
   listAdminEntries(minDate: string): Promise<AdminIndexEntry[]>;
-  getDevotionalByDayNumber(dayNumber: number): Promise<Devotional | undefined>;
   runRetention(options: { apply: boolean }): Promise<StorageRetentionResult>;
   mergeMeta(extra: MetaExtra): Promise<StorageMeta>;
   /**
@@ -118,7 +115,6 @@ function emptyWindow(): WindowDoc {
 function emptyMeta(): StorageMeta {
   return {
     version: 1,
-    maxDayNumber: 0,
     usedVerseReferences: [],
     usedTitles: [],
     usedCategories: [],
@@ -131,7 +127,6 @@ const INDEX_ERROR_MAX_CHARS = 200;
 function toIndexEntry(d: Devotional): IndexEntry {
   return {
     date: devotionalDateKey(d),
-    dayNumber: d.dayNumber,
     status: normalizeDevotionalStatus(d.status),
     title: d.title,
     verse: d.verse,
@@ -218,7 +213,7 @@ export function createBlobStorage(
   }
 
   function sortEntries(entries: IndexEntry[]): IndexEntry[] {
-    return [...entries].sort((a, b) => b.dayNumber - a.dayNumber);
+    return [...entries].sort((a, b) => b.date.localeCompare(a.date));
   }
 
   async function upsertIndexEntry(entry: IndexEntry, removeDate?: string) {
@@ -251,7 +246,7 @@ export function createBlobStorage(
     return rows
       .filter((r): r is { devotional: Devotional; etag: string } => Boolean(r))
       .map((r) => r.devotional)
-      .sort((a, b) => b.dayNumber - a.dayNumber);
+      .sort((a, b) => devotionalDateKey(b).localeCompare(devotionalDateKey(a)));
   }
 
   function belongsInWindow(d: Devotional): boolean {
@@ -313,21 +308,19 @@ export function createBlobStorage(
       value && value.trim() && !list.includes(value) ? [...list, value] : list;
 
     const day: HistoricalDayEntry = {
-      dayNumber: d.dayNumber,
+      date: devotionalDateKey(d),
       title: d.title,
       verseReference: verseRef,
       category: d.category ?? "—",
-      createdAt: d.createdAt,
     };
 
     return {
       version: 1,
-      maxDayNumber: Math.max(meta.maxDayNumber, d.dayNumber),
       usedVerseReferences: unique(meta.usedVerseReferences, verseRef),
       usedTitles: unique(meta.usedTitles, d.title),
       usedCategories: unique(meta.usedCategories, d.category),
-      recentDays: [...meta.recentDays.filter((r) => r.dayNumber !== d.dayNumber), day]
-        .sort((a, b) => a.dayNumber - b.dayNumber)
+      recentDays: [...meta.recentDays.filter((r) => r.date !== day.date), day]
+        .sort((a, b) => a.date.localeCompare(b.date))
         .slice(-RECENT_DAYS_LIMIT),
     };
   }
@@ -358,7 +351,8 @@ export function createBlobStorage(
     },
 
     async getDevotionalByDate(date: string) {
-      return (await readRecord(date))?.devotional;
+      // Friss olvasás: az admin és a generálás mindig a legutóbbi mentést lássa.
+      return (await readRecord(date, true))?.devotional;
     },
 
     async getDevotionalsByDates(dates: string[]) {
@@ -367,12 +361,7 @@ export function createBlobStorage(
 
     async getDevotionalsFromDate(minDate: string) {
       const index = await readIndex();
-      const newest = sortEntries(index.entries)[0];
-      const dates = new Set(
-        index.entries.filter((e) => e.date >= minDate).map((e) => e.date)
-      );
-      if (newest) dates.add(newest.date);
-      return readRecords([...dates]);
+      return readRecords(index.entries.filter((e) => e.date >= minDate).map((e) => e.date));
     },
 
     async saveDevotional(devotional: Devotional) {
@@ -382,9 +371,6 @@ export function createBlobStorage(
       const index = await readIndex(true);
       if (index.entries.some((e) => e.date === date)) {
         throw new Error(`Erre a napra (${date}) már van áhítat.`);
-      }
-      if (index.entries.some((e) => e.dayNumber === normalized.dayNumber)) {
-        throw new Error(`A ${normalized.dayNumber}. nap már létezik.`);
       }
 
       try {
@@ -456,9 +442,7 @@ export function createBlobStorage(
 
     async listAdminEntries(minDate: string) {
       const index = await readIndex(true);
-      const sorted = sortEntries(index.entries);
-      const newest = sorted[0];
-      return sorted.filter((e) => e.date >= minDate || e === newest);
+      return sortEntries(index.entries).filter((e) => e.date >= minDate);
     },
 
     /**
@@ -564,24 +548,17 @@ export function createBlobStorage(
           ...current,
           ...(add ?? []).filter((v) => v && v.trim() && !current.includes(v)),
         ];
-        meta.maxDayNumber = Math.max(meta.maxDayNumber, extra.maxDayNumber ?? 0);
         meta.usedVerseReferences = union(meta.usedVerseReferences, extra.usedVerseReferences);
         meta.usedTitles = union(meta.usedTitles, extra.usedTitles);
         meta.usedCategories = union(meta.usedCategories, extra.usedCategories);
-        const byDay = new Map(meta.recentDays.map((d) => [d.dayNumber, d]));
-        for (const d of extra.recentDays ?? []) byDay.set(d.dayNumber, d);
-        meta.recentDays = [...byDay.values()]
-          .sort((a, b) => a.dayNumber - b.dayNumber)
+        const byDate = new Map(meta.recentDays.map((d) => [d.date, d]));
+        for (const d of extra.recentDays ?? []) byDate.set(d.date, d);
+        meta.recentDays = [...byDate.values()]
+          .sort((a, b) => a.date.localeCompare(b.date))
           .slice(-RECENT_DAYS_LIMIT);
       });
       options.onChange?.();
       return doc;
-    },
-
-    async getDevotionalByDayNumber(dayNumber: number) {
-      const index = await readIndex(true);
-      const entry = index.entries.find((e) => e.dayNumber === dayNumber);
-      return entry ? (await readRecord(entry.date, true))?.devotional : undefined;
     },
 
     async getPublicWindowDevotionals() {
@@ -626,7 +603,7 @@ export function createBlobStorage(
       // A meta soha nem szűkül: a már törölt napok emlékezete megmarad.
       const existingMeta = await storage.getMeta();
       const meta = records
-        .sort((a, b) => a.dayNumber - b.dayNumber)
+        .sort((a, b) => devotionalDateKey(a).localeCompare(devotionalDateKey(b)))
         .reduce(addToMeta, existingMeta ?? emptyMeta());
       await client.putText(BLOB_PATHS.meta, JSON.stringify(meta));
 

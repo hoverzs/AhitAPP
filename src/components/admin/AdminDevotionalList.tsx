@@ -16,18 +16,18 @@ function formatDt(iso?: string): string {
 
 interface AdminDevotionalListProps {
   items: AdminDevotionalListItem[];
-  selectedDayNumber: number | null;
-  onSelect: (dayNumber: number) => void;
-  onEdit: (dayNumber: number) => void;
-  onRegenerate: (dayNumber: number) => void;
-  onRefine: (dayNumber: number) => void;
-  onPublish: (dayNumber: number) => void;
-  loadingDay?: number | null;
+  selectedDate: string | null;
+  onSelect: (date: string) => void;
+  onEdit: (date: string) => void;
+  onRegenerate: (date: string) => void;
+  onRefine: (date: string) => void;
+  onPublish: (date: string) => void;
+  loadingDay?: string | null;
 }
 
 export function AdminDevotionalList({
   items,
-  selectedDayNumber,
+  selectedDate,
   onSelect,
   onEdit,
   onRegenerate,
@@ -60,17 +60,14 @@ export function AdminDevotionalList({
         <tbody>
           {items.map((item) => (
             <tr
-              key={item.dayNumber}
+              key={item.date}
               className={
-                selectedDayNumber === item.dayNumber ? "admin-table-row-selected" : ""
+                selectedDate === item.date ? "admin-table-row-selected" : ""
               }
-              onClick={() => onSelect(item.dayNumber)}
+              onClick={() => onSelect(item.date)}
             >
               <td className="whitespace-nowrap">
                 <span className="font-medium text-ink">{item.date}</span>
-                <span className="block text-[11px] text-ink-muted mt-0.5">
-                  #{item.dayNumber}
-                </span>
               </td>
               <td className="max-w-[160px]">
                 <span className="font-medium text-ink line-clamp-2">{item.title}</span>
@@ -98,22 +95,22 @@ export function AdminDevotionalList({
                   <AdminButton
                     variant="edit"
                     size="sm"
-                    onClick={() => onEdit(item.dayNumber)}
+                    onClick={() => onEdit(item.date)}
                   >
                     Szerkesztés
                   </AdminButton>
                   <AdminButton
                     variant="regenerate"
                     size="sm"
-                    disabled={loadingDay === item.dayNumber}
-                    onClick={() => onRegenerate(item.dayNumber)}
+                    disabled={loadingDay === item.date}
+                    onClick={() => onRegenerate(item.date)}
                   >
-                    {loadingDay === item.dayNumber ? "…" : "Újragenerálás"}
+                    {loadingDay === item.date ? "…" : "Újragenerálás"}
                   </AdminButton>
                   <AdminButton
                     variant="default"
                     size="sm"
-                    onClick={() => onRefine(item.dayNumber)}
+                    onClick={() => onRefine(item.date)}
                   >
                     AI finomítás
                   </AdminButton>
@@ -121,7 +118,7 @@ export function AdminDevotionalList({
                     <AdminButton
                       variant="publish"
                       size="sm"
-                      onClick={() => onPublish(item.dayNumber)}
+                      onClick={() => onPublish(item.date)}
                     >
                       Közzététel
                     </AdminButton>

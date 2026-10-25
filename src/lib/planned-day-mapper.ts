@@ -87,8 +87,7 @@ export function assembleDevotionalContent(
 }
 
 export function assemblePlannedDayFromParts(
-  parts: DevotionalGenerationParts,
-  expectedDay: number
+  parts: DevotionalGenerationParts
 ): DynamicPlannedDay {
   const content = assembleDevotionalContent(
     parts.scripture,
@@ -97,7 +96,6 @@ export function assemblePlannedDayFromParts(
   const excerpt = parts.excerpt.trim() || parts.title;
 
   return {
-    dayNumber: expectedDay,
     title: parts.title.trim(),
     verse: parts.scripture.trim(),
     content,
@@ -119,13 +117,11 @@ export interface RawGeminiPlannedDay {
   content?: string;
   imageKeywords?: string;
   image_keywords?: string;
-  dayNumber?: number;
   facebookCopy?: string;
 }
 
 export function mapRawGeminiToPlannedDay(
-  parsed: RawGeminiPlannedDay,
-  expectedDay: number
+  parsed: RawGeminiPlannedDay
 ): DynamicPlannedDay {
   const scripture = parsed.scripture?.trim() || parsed.verse?.trim() || "";
   const devotionalBody = parsed.devotional?.trim() || parsed.content?.trim() || "";
@@ -138,18 +134,15 @@ export function mapRawGeminiToPlannedDay(
     );
   }
 
-  return assemblePlannedDayFromParts(
-    {
-      title,
-      scripture,
-      category,
-      excerpt: parsed.excerpt?.trim() || title,
-      devotionalMarkdown: devotionalBody,
-      imageKeywords:
-        limitImageKeywords(
-          parsed.imageKeywords?.trim() || parsed.image_keywords?.trim()
-        ) || undefined,
-    },
-    expectedDay
-  );
+  return assemblePlannedDayFromParts({
+    title,
+    scripture,
+    category,
+    excerpt: parsed.excerpt?.trim() || title,
+    devotionalMarkdown: devotionalBody,
+    imageKeywords:
+      limitImageKeywords(
+        parsed.imageKeywords?.trim() || parsed.image_keywords?.trim()
+      ) || undefined,
+  });
 }

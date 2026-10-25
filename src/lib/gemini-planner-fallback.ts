@@ -91,13 +91,12 @@ function truncateWords(text: string, maxWords: number): string {
  */
 export function buildFallbackPlannedDay(
   raw: string,
-  expectedDay: number,
   options?: { categoryHint?: string }
 ): DynamicPlannedDay {
   const partial = tryParsePartialJson(raw);
   if (partial) {
     try {
-      return mapRawGeminiToPlannedDay(partial, expectedDay);
+      return mapRawGeminiToPlannedDay(partial);
     } catch {
       /* plain text fallback below */
     }
@@ -105,7 +104,7 @@ export function buildFallbackPlannedDay(
 
   const title =
     extractField(raw, "title") ||
-    `A ${expectedDay}. nap áhítata`;
+    "Napi áhítat";
   const scripture =
     extractField(raw, "scripture") ||
     extractField(raw, "verse");
@@ -137,7 +136,6 @@ export function buildFallbackPlannedDay(
     ) || "quiet path, soft light, still lake, dawn";
 
   return {
-    dayNumber: expectedDay,
     title,
     verse: scripture,
     content,

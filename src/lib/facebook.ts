@@ -79,6 +79,6 @@ export function formatDevotionalForFacebook(
 }
 
 /** Nyilvános áhítat URL — mindig NEXT_PUBLIC_SITE_URL alapján (nem window.location). */
-export function getPublicDevotionalUrl(dayNumber: number): string {
-  return `${getSiteUrl()}/nap/${dayNumber}`;
+export function getPublicDevotionalUrl(date: string): string {
+  return `${getSiteUrl()}/devotional/${date}`;
 }

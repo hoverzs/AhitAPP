@@ -25,15 +25,14 @@ import type { Devotional } from "../src/lib/types";
 const TODAY = "2026-10-24"; // cutoff: 2026-10-17
 
 function devotional(
-  dayNumber: number,
+  n: number,
   date: string,
   overrides: Partial<Devotional> = {}
 ): Devotional {
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: `## Tartalom\n\nSzöveg ${date}`,
     imageUrl: "https://images.pexels.com/photos/1/a.jpeg",
     createdAt: `${date}T08:00:00.000Z`,
@@ -66,12 +65,11 @@ test("terv: a retention által megtartott rekordok kerülnek át, a régi közz�
   const plan = planMigration(sourceRecords(), TODAY);
 
   assert.equal(plan.totalRecords, 7);
-  assert.deepEqual(plan.toImport.map((d) => d.dayNumber), [3, 4, 5, 6, 7]);
+  assert.deepEqual(plan.toImport.map((d) => d.title), ["Cím 3", "Cím 4", "Cím 5", "Cím 6", "Cím 7"]);
   assert.deepEqual(plan.skippedOldPublished, ["2026-05-29", "2026-09-14"]);
   assert.deepEqual(plan.oldUnpublishedKept, ["2026-10-05"]);
   assert.equal(plan.cutoff, "2026-10-17");
   assert.equal(plan.newestDate, "2026-10-26");
-  assert.equal(plan.maxDayNumber, 7);
 });
 
 test("terv: a meta a TELJES előzményből épül, a nem átvitt napokból is", () => {
@@ -79,7 +77,6 @@ test("terv: a meta a TELJES előzményből épül, a nem átvitt napokból is", 
 
   assert.ok(plan.meta.usedVerseReferences?.includes("Máté 5:3"), "a kihagyott 2. nap igehelye megvan");
   assert.ok(plan.meta.usedTitles?.includes("Cím 1"));
-  assert.equal(plan.meta.maxDayNumber, 7);
   assert.equal(plan.meta.recentDays?.length, 7);
 
   const direct = buildMigrationMeta(sourceRecords());
@@ -88,11 +85,10 @@ test("terv: a meta a TELJES előzményből épül, a nem átvitt napokból is", 
 
 test("terv: figyelmeztet a helyi képútvonalra és a duplikátumokra", () => {
   const plan = planMigration(
-    [...sourceRecords(), devotional(6, "2026-10-25")], // 6. napszám kétszer
+    [...sourceRecords(), devotional(6, "2026-10-25")],
     TODAY
   );
   assert.ok(plan.warnings.some((w) => w.includes("/images/devotionals/day-6.jpg")));
-  assert.ok(plan.warnings.some((w) => w.includes("Duplikált napszám")));
 
   const dup = planMigration([devotional(1, "2026-10-24"), devotional(2, "2026-10-24")], TODAY);
   assert.ok(dup.warnings.some((w) => w.includes("Duplikált dátum")));
@@ -194,32 +190,30 @@ test("a nem átvitt napok emlékezete az átállás után a generálási memóri
 
   const history = await storage.getLatestDevotionals();
   const memory = mergeStoredMetaIntoMemory(
-    buildDevotionalMemory(history, { nextDayNumber: 8 }),
+    buildDevotionalMemory(history, { targetDate: "2026-10-27" }),
     await storage.getMeta()
   );
 
   assert.ok(memory.usedVerseReferences.includes("Máté 5:3"), "a nem átvitt 2. nap igehelye használtnak számít");
   assert.ok(memory.usedTitles.includes("Cím 1"));
-  assert.equal(memory.nextDayNumber, 8);
+  assert.equal(memory.targetDate, "2026-10-27");
 });
 
-test("B forgatókönyv: az utolsó napszám és az igehelyek beállíthatók, a meta nem szűkül", async () => {
+test("B forgatókönyv: a használt igehelyek beállíthatók, a meta nem szűkül", async () => {
   const { storage } = freshStorage();
 
-  await storage.mergeMeta({ maxDayNumber: 148, usedVerseReferences: ["Zsolt 23:1", "Ján 3:16"] });
+  await storage.mergeMeta({ usedVerseReferences: ["Zsolt 23:1", "Ján 3:16"] });
   let meta = await storage.getMeta();
-  assert.equal(meta?.maxDayNumber, 148);
   assert.deepEqual(meta?.usedVerseReferences, ["Zsolt 23:1", "Ján 3:16"]);
 
-  // Kisebb szám és új ige: a szám marad, az ige hozzáadódik, duplikátum nincs.
-  await storage.mergeMeta({ maxDayNumber: 10, usedVerseReferences: ["Ján 3:16", "Róma 8:28"] });
+  // Új ige hozzáadódik, duplikátum nincs.
+  await storage.mergeMeta({ usedVerseReferences: ["Ján 3:16", "Róma 8:28"] });
   meta = await storage.getMeta();
-  assert.equal(meta?.maxDayNumber, 148);
   assert.deepEqual(meta?.usedVerseReferences, ["Zsolt 23:1", "Ján 3:16", "Róma 8:28"]);
 
-  // A következő generált nap napszáma 149 lenne a megőrzött maxDayNumber miatt.
-  const memory = mergeStoredMetaIntoMemory(buildDevotionalMemory([]), meta);
-  assert.equal(memory.maxDayNumber, 148);
+  // Napszám nélkül is működik: a generálás csak a használt igehelyeket nézi.
+  const memory = mergeStoredMetaIntoMemory(buildDevotionalMemory([], { targetDate: "2026-10-27" }), meta);
+  assert.ok(memory.usedVerseReferences.includes("Róma 8:28"));
 });
 
 test("export-fájl: körbejárás után a rekordok (versionHistory-val együtt) változatlanok", () => {
@@ -233,7 +227,7 @@ test("export-fájl: körbejárás után a rekordok (versionHistory-val együtt) 
   };
   const roundTripped = parseDevotionalList(JSON.parse(JSON.stringify(file)).records);
   assert.equal(roundTripped.length, records.length);
-  assert.equal(roundTripped.find((d) => d.dayNumber === 5)?.versionHistory?.length, 1);
+  assert.equal(roundTripped.find((d) => d.title === "Cím 5")?.versionHistory?.length, 1);
 });
 
 test("az export-szkript semmilyen író Redis-műveletet nem tartalmaz", () => {

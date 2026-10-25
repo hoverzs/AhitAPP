@@ -20,7 +20,7 @@ import { getAppTodayIso } from "../src/lib/app-date";
 import { uploadDevotionalImage } from "../src/lib/devotional-image-upload";
 import {
   appendDevotional,
-  getDevotionalByDay,
+  getDevotionalByDate,
   getPublicWindowDevotionals,
   PUBLIC_CACHE_REVALIDATE_SECONDS,
   readDevotionals,
@@ -50,13 +50,12 @@ function addDays(iso: string, n: number): string {
 }
 
 /** Valósághű méret: ~3 KB szöveg + ima + Facebook-szöveg + 2 korábbi változat. */
-function devotional(dayNumber: number, date: string, overrides: Partial<Devotional> = {}): Devotional {
+function devotional(n: number, date: string, overrides: Partial<Devotional> = {}): Devotional {
   const body = `## Elmélkedés\n\n${"Szöveg ".repeat(450)}`;
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: body,
     prayer: "Ima ".repeat(60),
     facebookCopy: "Facebook szöveg ".repeat(40),
@@ -111,7 +110,7 @@ test("Hobby keret: a mért folyamatok havi kivetítése a keret felénél kevese
     await readDevotionals(); // generate: előzmény
     await readStoredMeta(); // memória a törölt napokból
     await appendDevotional(devotional(200, today, { imageUrl: "" })); // mentés
-    await saveDevotionalPexelsImage(200, {
+    await saveDevotionalPexelsImage(today, {
       imageUrl: "https://images.pexels.com/photos/2/b.jpeg",
       imageCredit: "Fotós",
       imagePhotographerUrl: "https://www.pexels.com/@f",
@@ -132,12 +131,12 @@ test("Hobby keret: a mért folyamatok havi kivetítése a keret felénél kevese
   const adminSession = await measure(async () => {
     await loadAdminPageData();
     await loadAdminPageData();
-    await getDevotionalByDay(95);
-    await getDevotionalByDay(96);
-    await saveDevotionalAdminEdit(200, { title: "Szerkesztett cím" });
-    await updateDevotionalStatus(200, "draft");
-    await updateDevotionalStatus(200, "published");
-    await uploadDevotionalImage({ dayNumber: 200, bytes: JPEG });
+    await getDevotionalByDate(addDays(today, -5));
+    await getDevotionalByDate(addDays(today, -6));
+    await saveDevotionalAdminEdit(today, { title: "Szerkesztett cím" });
+    await updateDevotionalStatus(today, "draft");
+    await updateDevotionalStatus(today, "published");
+    await uploadDevotionalImage({ date: today, bytes: JPEG });
   });
 
   // F4: egy nyilvános gyorsítótár-frissítés (a Next-cache 10 percenként legfeljebb egyszer olvas).

@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const displayImage = resolveDevotionalDisplayImage(devotional.imageUrl);
 
   return {
-    title: `${devotional.dayNumber}. nap – ${devotional.title}`,
+    title: devotional.title,
     description: devotional.verse,
     openGraph: {
       title: devotional.title,
@@ -63,14 +63,14 @@ export default async function DevotionalByDatePage({ params }: PageProps) {
   }
 
   const devotional = result.devotional;
-  const publicUrl = getPublicDevotionalUrl(devotional.dayNumber);
+  const publicUrl = getPublicDevotionalUrl(devotional.date);
 
   return (
     <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
       <DevotionalArticleLayout
         content={devotional.content}
         verse={devotional.verse}
-        dayNumber={devotional.dayNumber}
+        date={devotional.date}
         title={devotional.title}
         category={devotional.category}
         imageUrl={devotional.imageUrl}

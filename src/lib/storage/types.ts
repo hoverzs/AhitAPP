@@ -12,7 +12,6 @@ export interface GetLatestDevotionalsOptions {
  */
 export interface AdminIndexEntry {
   date: string;
-  dayNumber: number;
   status: DevotionalStatus;
   title: string;
   verse?: string;
@@ -27,7 +26,6 @@ export interface AdminIndexEntry {
 
 /** A Blob tároló karbantartott, a rekordok törlése után is megmaradó előzménye. */
 export interface StorageMetaSummary {
-  maxDayNumber: number;
   usedVerseReferences: string[];
   usedTitles: string[];
   usedCategories: string[];
@@ -55,10 +53,7 @@ export interface DevotionalStorage {
   getDevotionalByDate(date: string): Promise<Devotional | undefined>;
   /** Pontosan a megadott dátumok rekordjai (Redis: egyetlen MGET, index nélkül). */
   getDevotionalsByDates(dates: string[]): Promise<Devotional[]>;
-  /**
-   * Admin munkakészlet: a minDate-nél nem régebbi (vagy jövőbeli) rekordok
-   * + a legnagyobb napszámú rekord (a napszámozáshoz).
-   */
+  /** Admin munkakészlet: a minDate-nél nem régebbi (vagy jövőbeli) rekordok. */
   getDevotionalsFromDate(minDate: string): Promise<Devotional[]>;
   saveDevotional(devotional: Devotional): Promise<Devotional>;
   updateDevotional(date: string, devotional: Devotional): Promise<Devotional>;
@@ -69,7 +64,6 @@ export interface DevotionalStorage {
    * csak a könnyű sorokat tölti be, a teljes rekordot pedig igény szerint.
    */
   listAdminEntries?(minDate: string): Promise<AdminIndexEntry[]>;
-  getDevotionalByDayNumber?(dayNumber: number): Promise<Devotional | undefined>;
   getMeta?(): Promise<StorageMetaSummary | null>;
   /** Nyilvános pillanatkép egyetlen olvasással; null, ha még nincs. */
   getPublicWindowDevotionals?(): Promise<Devotional[] | null>;

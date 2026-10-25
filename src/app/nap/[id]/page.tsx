@@ -1,105 +1,47 @@
-import { notFound } from "next/navigation";
-import { DevotionalArticleLayout } from "@/components/devotional/DevotionalArticleLayout";
-import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareButtons";
-import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
+import Link from "next/link";
 import type { Metadata } from "next";
-import { getPublicWindowDevotionals } from "@/lib/devotionals";
-import { getPublicDevotionalUrl } from "@/lib/facebook";
-import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
-import type { Devotional } from "@/lib/types";
-
-export const dynamic = "force-dynamic";
-
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-type DayLookup =
-  | { kind: "ok"; devotional: Devotional }
-  | { kind: "expired" }
-  | { kind: "missing" }
-  | { kind: "error" };
 
 /**
- * Napszám szerinti keresés a nyilvános 8 napos ablakban (ugyanaz a cache-elt
- * lista, mint a főoldalé). A Facebook-linkek /nap/<napszám> alakúak, ezért az
- * ablakból kiesett napszám „lejárt"; a legújabbnál nagyobb „még nincs".
+ * Régi, napszám alapú hivatkozások (/nap/<szám>). A napszámozás megszűnt: az
+ * áhítatok kizárólag dátum alapján (/devotional/YYYY-MM-DD) érhetők el, és csak
+ * a mai nap + az elmúlt 7 nap olvasható. Ez az oldal SOHA nem jelenít meg
+ * áhítat-tartalmat, és a tárolóhoz sem nyúl — a régi számok nem használhatók
+ * újra, bármilyen számot kapnak, ugyanezt a tájékoztatót látják.
  */
-async function lookupByDay(dayNumber: number): Promise<DayLookup> {
-  try {
-    const window = await getPublicWindowDevotionals();
-    const found = window.find((d) => d.dayNumber === dayNumber);
-    if (found) return { kind: "ok", devotional: found };
-    const newest = window[0]?.dayNumber ?? 0;
-    return { kind: dayNumber > newest ? "missing" : "expired" };
-  } catch (error) {
-    console.error(`[nap/[id]] dayNumber=${dayNumber} → STORAGE ERROR`, error);
-    return { kind: "error" };
-  }
-}
+export const dynamic = "force-static";
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { id } = await params;
-  const dayNumber = Number(id);
-  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
-    return { title: "Nem található" };
-  }
+export const metadata: Metadata = {
+  title: "Ez a hivatkozás már nem érvényes",
+  robots: { index: false, follow: true },
+};
 
-  const result = await lookupByDay(dayNumber);
-  if (result.kind !== "ok") {
-    return { title: "Az áhítat nem érhető el", robots: { index: false } };
-  }
-
-  const devotional = result.devotional;
-  const displayImage = resolveDevotionalDisplayImage(devotional.imageUrl);
-
-  return {
-    title: `${devotional.dayNumber}. nap – ${devotional.title}`,
-    description: devotional.verse,
-    openGraph: {
-      title: devotional.title,
-      description: devotional.verse,
-      ...(displayImage.src ? { images: [{ url: displayImage.src }] } : {}),
-    },
-  };
-}
-
-export default async function DevotionalPage({ params }: PageProps) {
-  const { id } = await params;
-  const dayNumber = Number(id);
-
-  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
-    notFound();
-  }
-
-  const result = await lookupByDay(dayNumber);
-
-  if (result.kind !== "ok") {
-    return (
-      <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-        <DevotionalUnavailable reason={result.kind} />
-      </article>
-    );
-  }
-
-  const devotional = result.devotional;
-  const publicUrl = getPublicDevotionalUrl(dayNumber);
-
+export default function LegacyDayLinkPage() {
   return (
     <article className="devotional-day-page mx-auto w-full max-w-[840px] px-5 sm:px-6 py-12 md:py-20">
-      <DevotionalArticleLayout
-        content={devotional.content}
-        verse={devotional.verse}
-        dayNumber={devotional.dayNumber}
-        title={devotional.title}
-        category={devotional.category}
-        imageUrl={devotional.imageUrl}
-        imageMeta={devotional}
-        showHeader
-        priorityImage
-      />
-
-      <DevotionalShareButtons devotional={devotional} publicUrl={publicUrl} />
+      <div className="max-w-lg mx-auto px-6 py-16 text-center">
+        <h1 className="font-serif text-3xl sm:text-4xl text-slate-800">
+          Ez a hivatkozás már nem érvényes
+        </h1>
+        <p className="mt-5 text-slate-600 leading-relaxed">
+          Az áhítatok korábban sorszámmal (<span className="whitespace-nowrap">/nap/12</span>) voltak elérhetők.
+          Ez a megoldás megszűnt: az áhítatok mostantól dátum szerint nyílnak meg, és
+          csak a mai nap, valamint az elmúlt hét nap áhítata olvasható.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <Link
+            href="/mai"
+            className="rounded-full bg-gold-500 px-6 py-3 text-white font-medium hover:bg-gold-600"
+          >
+            A mai áhítat megnyitása
+          </Link>
+          <Link
+            href="/#elmult-napok"
+            className="rounded-full border border-parchment-200 px-6 py-3 text-slate-700 font-medium hover:border-gold-400"
+          >
+            Az elmúlt napok
+          </Link>
+        </div>
+      </div>
     </article>
   );
 }

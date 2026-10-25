@@ -103,7 +103,6 @@ export async function resolveDevotionalImageForGeneration(
 export async function autoAssignPexelsToDevotional(devotional: Devotional): Promise<AutoImageResult> {
   const keywords =
     devotional.imageKeywords?.trim() || deriveImageKeywordsFromPlan({
-      dayNumber: devotional.dayNumber,
       title: devotional.title,
       verse: devotional.verse,
       content: devotional.content,
@@ -113,7 +112,6 @@ export async function autoAssignPexelsToDevotional(devotional: Devotional): Prom
 
   return resolveDevotionalImageForGeneration(
     {
-      dayNumber: devotional.dayNumber,
       title: devotional.title,
       verse: devotional.verse,
       content: devotional.content,

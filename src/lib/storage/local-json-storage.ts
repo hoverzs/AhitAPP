@@ -39,7 +39,9 @@ async function writeRawToFile(devotionals: Devotional[]): Promise<void> {
 }
 
 function latestFirst(all: Devotional[], limit?: number): Devotional[] {
-  const sorted = [...all].sort((a, b) => b.dayNumber - a.dayNumber);
+  const sorted = [...all].sort((a, b) =>
+    devotionalDateKey(b).localeCompare(devotionalDateKey(a))
+  );
   if (limit != null && limit > 0) {
     return sorted.slice(0, limit);
   }
@@ -64,10 +66,7 @@ export const localJsonStorage: DevotionalStorage = {
 
   async getDevotionalsFromDate(minDate: string) {
     const all = await readRawFromFile();
-    const newest = [...all].sort((a, b) => b.dayNumber - a.dayNumber)[0];
-    return latestFirst(
-      all.filter((d) => devotionalDateKey(d) >= minDate || d === newest)
-    );
+    return latestFirst(all.filter((d) => devotionalDateKey(d) >= minDate));
   },
 
   async saveDevotional(devotional: Devotional) {
@@ -78,10 +77,6 @@ export const localJsonStorage: DevotionalStorage = {
     if (all.some((d) => devotionalDateKey(d) === date)) {
       throw new Error(`Erre a napra (${date}) már van áhítat.`);
     }
-    if (all.some((d) => d.dayNumber === normalized.dayNumber)) {
-      throw new Error(`A ${normalized.dayNumber}. nap már létezik.`);
-    }
-
     all.push(normalized);
     await writeRawToFile(all);
     return normalized;

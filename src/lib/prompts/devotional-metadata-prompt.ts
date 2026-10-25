@@ -34,7 +34,7 @@ export function buildMetadataUserPrompt(
     options?.rejectedReferencesThisRun ?? []
   );
 
-  return `A ${memory.nextDayNumber}. nap metadata-ja.
+  return `A(z) ${memory.targetDate} napi áhítat metadata-ja.
 
 ${usedBlock}
 
@@ -43,6 +43,6 @@ ${memory.summaryForPrompt}
 
 Válassz alapigét a fenti irányelvek szerint.
 Prefer less obvious but biblically meaningful passages when appropriate. Avoid overusing the most common devotional verses, but do not force obscure passages at the expense of theological clarity, relevance, or natural flow.
-Tartsd a sorozat tematikus/logikai ívét (kategória, nap száma).
+Tartsd a sorozat tematikus/logikai ívét (kategória, a korábbi napok témái).
 Csak a 5 mezős JSON. Ne írj áhítat szöveget.${rejectionsBlock}`;
 }

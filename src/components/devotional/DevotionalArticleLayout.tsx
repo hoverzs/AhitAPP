@@ -1,5 +1,6 @@
 import { DevotionalIllustration } from "@/components/DevotionalIllustration";
 import { ImageCredit } from "@/components/ImageCredit";
+import { formatDevotionalDate } from "@/lib/devotional-excerpt";
 import { hasAssignedDevotionalImage } from "@/lib/image-assets";
 import type { Devotional } from "@/lib/types";
 import {
@@ -10,7 +11,8 @@ import {
 export interface DevotionalArticleLayoutProps {
   content: string;
   verse?: string;
-  dayNumber: number;
+  /** Az áhítat napja (YYYY-MM-DD) — a megjelenített címke ebből készül. */
+  date: string;
   title: string;
   category?: string;
   imageUrl: string;
@@ -30,7 +32,7 @@ export interface DevotionalArticleLayoutProps {
 export function DevotionalArticleLayout({
   content,
   verse,
-  dayNumber,
+  date,
   title,
   category,
   imageUrl,
@@ -42,13 +44,14 @@ export function DevotionalArticleLayout({
   const alapige = sections.find((s) => s.id === "alapige");
   const bodySections = sections.filter((s) => s.id !== "alapige");
   const showCredit = hasAssignedDevotionalImage(imageUrl);
+  const dateLabel = formatDevotionalDate(date);
 
   return (
     <div className="devotional-article w-full">
       {showHeader && (
         <header className="text-center mb-8 md:mb-10">
           <p className="text-xs font-medium uppercase tracking-[0.25em] text-gold-600 mb-4">
-            {dayNumber}. nap
+            {dateLabel}
             {category ? ` · ${category}` : ""}
           </p>
           <h1 className="font-serif text-3xl sm:text-4xl md:text-[2.75rem] font-semibold text-ink leading-tight tracking-tight">
@@ -76,7 +79,7 @@ export function DevotionalArticleLayout({
           />
         </div>
         <figcaption className="devotional-article-caption">
-          <span className="devotional-article-caption-day">{dayNumber}. nap</span>
+          <span className="devotional-article-caption-day">{dateLabel}</span>
           {showCredit && (
             <ImageCredit devotional={{ ...imageMeta, imageUrl }} className="sm:text-right" />
           )}

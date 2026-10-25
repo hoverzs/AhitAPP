@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatDevotionalDate } from "@/lib/devotional-excerpt";
 import { DevotionalContent } from "@/components/devotional/DevotionalContent";
 import { AdminDevotionalList } from "@/components/admin/AdminDevotionalList";
 import { AdminDevotionalImagePanel } from "@/components/admin/AdminDevotionalImagePanel";
@@ -105,7 +106,7 @@ export function AdminDashboard({
   const [loading, setLoading] = useState(false);
   const [todayCronLoading, setTodayCronLoading] = useState(false);
   const [todayCronNotice, setTodayCronNotice] = useState<string | null>(null);
-  const [regenerateLoading, setRegenerateLoading] = useState<number | null>(null);
+  const [regenerateLoading, setRegenerateLoading] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [pingLoading, setPingLoading] = useState(false);
   const [error, setError] = useState<ApiErrorPayload | null>(null);
@@ -113,18 +114,18 @@ export function AdminDashboard({
   const [context, setContext] = useState(adminContext);
   const [listItems, setListItems] = useState(initialListItems);
   const [devotionalsByDay, setDevotionalsByDay] = useState(() => {
-    const map = new Map<number, Devotional>();
-    for (const d of initialDevotionals) map.set(d.dayNumber, d);
+    const map = new Map<string, Devotional>();
+    for (const d of initialDevotionals) map.set(d.date, d);
     return map;
   });
-  const [selectedDay, setSelectedDay] = useState<number | null>(
-    initialLatest?.dayNumber ?? initialListItems[0]?.dayNumber ?? null
+  const [selectedDay, setSelectedDay] = useState<string | null>(
+    initialLatest?.date ?? initialListItems[0]?.date ?? null
   );
   const [editMode, setEditMode] = useState(false);
   const [editFields, setEditFields] = useState<EditableDevotionalFields | null>(null);
-  const [confirmRegenerateDay, setConfirmRegenerateDay] = useState<number | null>(null);
-  const [refineDay, setRefineDay] = useState<number | null>(null);
-  const [loadingDay, setLoadingDay] = useState<number | null>(null);
+  const [confirmRegenerateDay, setConfirmRegenerateDay] = useState<string | null>(null);
+  const [refineDay, setRefineDay] = useState<string | null>(null);
+  const [loadingDay, setLoadingDay] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   // A betöltött napok és a kiválasztott nap aktuális értéke aszinkron callbackekhez.
@@ -159,10 +160,9 @@ export function AdminDashboard({
   }, [listItems, todayIso]);
 
   const mergeDevotional = useCallback((d: Devotional) => {
-    setDevotionalsByDay((prev) => new Map(prev).set(d.dayNumber, d));
+    setDevotionalsByDay((prev) => new Map(prev).set(d.date, d));
     setListItems((prev) => {
       const item: AdminDevotionalListItem = {
-        dayNumber: d.dayNumber,
         date: d.date,
         title: d.title,
         verse: d.verse,
@@ -172,13 +172,13 @@ export function AdminDashboard({
         editedByAdmin: d.editedByAdmin,
         category: d.category,
       };
-      const idx = prev.findIndex((i) => i.dayNumber === d.dayNumber);
+      const idx = prev.findIndex((i) => i.date === d.date);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = item;
-        return next.sort((a, b) => b.dayNumber - a.dayNumber);
+        return next.sort((a, b) => b.date.localeCompare(a.date));
       }
-      return [item, ...prev].sort((a, b) => b.dayNumber - a.dayNumber);
+      return [item, ...prev].sort((a, b) => b.date.localeCompare(a.date));
     });
   }, []);
 
@@ -187,13 +187,13 @@ export function AdminDashboard({
    * szerverről. Csak a megnyitott napot kérjük le, nem a teljes készletet.
    */
   const loadDay = useCallback(
-    async (dayNumber: number): Promise<Devotional | null> => {
-      const cached = devotionalsByDayRef.current.get(dayNumber);
+    async (date: string): Promise<Devotional | null> => {
+      const cached = devotionalsByDayRef.current.get(date);
       if (cached) return cached;
 
-      setLoadingDay(dayNumber);
+      setLoadingDay(date);
       try {
-        const res = await fetch(`/api/admin/devotional?day=${dayNumber}`);
+        const res = await fetch(`/api/admin/devotional?date=${date}`);
         const data = (await res.json()) as ApiErrorPayload & { devotional?: Devotional };
         if (!res.ok || !data.devotional) {
           setError({
@@ -204,13 +204,13 @@ export function AdminDashboard({
           return null;
         }
         const loaded = data.devotional;
-        setDevotionalsByDay((prev) => new Map(prev).set(loaded.dayNumber, loaded));
+        setDevotionalsByDay((prev) => new Map(prev).set(loaded.date, loaded));
         return loaded;
       } catch {
         setError({ error: "Hálózati hiba a nap betöltése közben.", code: "NETWORK" });
         return null;
       } finally {
-        setLoadingDay((current) => (current === dayNumber ? null : current));
+        setLoadingDay((current) => (current === date ? null : current));
       }
     },
     []
@@ -228,9 +228,9 @@ export function AdminDashboard({
 
     if (data.lazy) {
       // Lusta tároló: a már betöltött napokból csak a változatlanokat tartjuk meg.
-      const kept = new Map<number, Devotional>();
+      const kept = new Map<string, Devotional>();
       for (const [day, d] of devotionalsByDayRef.current) {
-        const item = data.items.find((i) => i.dayNumber === day);
+        const item = data.items.find((i) => i.date === day);
         if (item && item.updatedAt === d.updatedAt) kept.set(day, d);
       }
       devotionalsByDayRef.current = kept;
@@ -240,8 +240,8 @@ export function AdminDashboard({
       return;
     }
 
-    const map = new Map<number, Devotional>();
-    for (const d of data.devotionals) map.set(d.dayNumber, d);
+    const map = new Map<string, Devotional>();
+    for (const d of data.devotionals) map.set(d.date, d);
     setDevotionalsByDay(map);
   }, [loadDay]);
 
@@ -254,21 +254,21 @@ export function AdminDashboard({
   }, []);
 
   const selectDay = useCallback(
-    (dayNumber: number) => {
-      setSelectedDay(dayNumber);
+    (date: string) => {
+      setSelectedDay(date);
       setEditMode(false);
       setEditFields(null);
       setError(null);
       scrollToPreview();
-      void loadDay(dayNumber);
+      void loadDay(date);
     },
     [scrollToPreview, loadDay]
   );
 
   const enterEditMode = useCallback(
-    async (dayNumber: number) => {
-      setSelectedDay(dayNumber);
-      const d = await loadDay(dayNumber);
+    async (date: string) => {
+      setSelectedDay(date);
+      const d = await loadDay(date);
       if (!d) return;
       setEditFields(initEditableFields(d));
       setEditMode(true);
@@ -327,7 +327,6 @@ export function AdminDashboard({
         created?: boolean;
         message?: string;
         devotional?: {
-          dayNumber: number;
           date: string;
           title: string;
           status?: string;
@@ -390,16 +389,16 @@ export function AdminDashboard({
           data.message ??
             "A mai napra már van áhítat. Használd az újragenerálás gombot, ha módosítani szeretnéd."
         );
-        if (data.devotional?.dayNumber) {
+        if (data.devotional?.date) {
           await refreshFromServer();
-          selectDay(data.devotional.dayNumber);
+          selectDay(data.devotional.date);
         }
         return;
       }
 
       await refreshFromServer();
-      if (data.devotional?.dayNumber) {
-        selectDay(data.devotional.dayNumber);
+      if (data.devotional?.date) {
+        selectDay(data.devotional.date);
       }
       setToast("A mai áhítat elkészült és publikálva lett.");
     } catch {
@@ -447,7 +446,7 @@ export function AdminDashboard({
 
       if (data.devotional) {
         mergeDevotional(data.devotional);
-        selectDay(data.devotional.dayNumber);
+        selectDay(data.devotional.date);
         const d = data.devotional;
         const imageNote =
           d.imageUrl && (d.imageSource === "pexels_auto" || d.imageSource === "pexels")
@@ -455,7 +454,7 @@ export function AdminDashboard({
             : d.imageUrl
               ? " · Kép mentve"
               : " · Alapértelmezett fallback kép";
-        setToast(`Generálva: ${d.dayNumber}. nap${imageNote}`);
+        setToast(`Generálva: ${d.date}${imageNote}`);
       }
       if (data.adminContext) {
         setContext(data.adminContext);
@@ -471,8 +470,8 @@ export function AdminDashboard({
     }
   }
 
-  async function handleRegenerate(dayNumber: number) {
-    setRegenerateLoading(dayNumber);
+  async function handleRegenerate(date: string) {
+    setRegenerateLoading(date);
     setError(null);
     setConfirmRegenerateDay(null);
 
@@ -480,7 +479,7 @@ export function AdminDashboard({
       const res = await fetch("/api/admin/devotional/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dayNumber, backup: true }),
+        body: JSON.stringify({ date, backup: true }),
       });
 
       const data = (await res.json()) as ApiErrorPayload & {
@@ -509,14 +508,14 @@ export function AdminDashboard({
 
       if (data.devotional) {
         mergeDevotional(data.devotional);
-        selectDay(data.devotional.dayNumber);
+        selectDay(data.devotional.date);
         if (editMode) {
           setEditFields(initEditableFields(data.devotional));
         }
         setToast(
           data.backedUp
-            ? `${dayNumber}. nap újragenerálva (előző verzió mentve).`
-            : `${dayNumber}. nap újragenerálva.`
+            ? `${date}: újragenerálva (előző verzió mentve).`
+            : `${date}: újragenerálva.`
         );
       }
       if (data.adminContext) {
@@ -532,10 +531,10 @@ export function AdminDashboard({
   async function handleAdminAction(
     action: "save" | "save_draft" | "approve" | "publish" | "revert_draft",
     fields?: EditableDevotionalFields,
-    dayNumber?: number
+    date?: string
   ) {
     // A listából indított művelet (pl. Közzététel) a nap betöltése nélkül is megy.
-    const targetDay = dayNumber ?? preview?.dayNumber;
+    const targetDay = date ?? preview?.date;
     if (targetDay == null) return;
 
     setActionLoading(action);
@@ -543,7 +542,7 @@ export function AdminDashboard({
 
     try {
       const body: Record<string, unknown> = {
-        dayNumber: targetDay,
+        date: targetDay,
         action,
       };
       if (fields && (action === "save" || action === "save_draft")) {
@@ -587,7 +586,7 @@ export function AdminDashboard({
   }
 
   const facebookText = preview
-    ? formatDevotionalForFacebook(preview, getPublicDevotionalUrl(preview.dayNumber))
+    ? formatDevotionalForFacebook(preview, getPublicDevotionalUrl(preview.date))
     : "";
 
   const recentCategories = memory.usedCategories.slice(-5).join(" → ") || "—";
@@ -670,7 +669,7 @@ export function AdminDashboard({
           <div className="flex flex-wrap items-end justify-between gap-6">
             <div>
               <p className="font-serif text-4xl font-semibold text-ink tracking-tight">
-                {target.dayNumber}. nap
+                {formatDevotionalDate(target.date)}
               </p>
               <p className="text-sm text-ink-muted mt-1">{target.date}</p>
               <p className="text-sm text-gold-700/90 mt-4 font-medium">
@@ -703,7 +702,7 @@ export function AdminDashboard({
           {initialStorageError && (
             <p className="mt-4 text-sm text-amber-900 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-3">
               A generálás addig nem indítható, amíg az áhítatok tárolója nem érhető el
-              (lásd a fenti hibaüzenetet). A megjelenített „{target.dayNumber}. nap” cél
+              (lásd a fenti hibaüzenetet). A megjelenített „{target.date}” cél
               ilyenkor nem megbízható.
             </p>
           )}
@@ -763,7 +762,7 @@ export function AdminDashboard({
                     {preview.date === todayIso ? "Mai áhítat · " : ""}{editMode ? "Szerkesztő" : "Előnézet"} · {preview.date}
                   </p>
                   <h2 className="font-serif text-2xl md:text-3xl font-semibold text-ink mt-2 tracking-tight leading-snug">
-                    {preview.dayNumber}. nap —{" "}
+                    {preview.date} —{" "}
                     {editMode && editFields ? editFields.title : preview.title}
                   </h2>
                   {preview.category && (
@@ -816,19 +815,19 @@ export function AdminDashboard({
             <div className="admin-toolbar">
               {!editMode ? (
                 <>
-                  <AdminButton variant="edit" onClick={() => enterEditMode(preview.dayNumber)}>
+                  <AdminButton variant="edit" onClick={() => enterEditMode(preview.date)}>
                     Szerkesztés
                   </AdminButton>
                   <AdminButton
                     variant="regenerate"
-                    onClick={() => setConfirmRegenerateDay(preview.dayNumber)}
+                    onClick={() => setConfirmRegenerateDay(preview.date)}
                     disabled={regenerateLoading !== null}
                   >
                     Újragenerálás
                   </AdminButton>
                   <AdminButton
                     variant="default"
-                    onClick={() => setRefineDay(preview.dayNumber)}
+                    onClick={() => setRefineDay(preview.date)}
                     disabled={regenerateLoading !== null}
                   >
                     AI finomítás
@@ -926,7 +925,7 @@ export function AdminDashboard({
               aria-live="polite"
             >
               {loadingDay != null
-                ? `A(z) ${loadingDay}. nap betöltése…`
+                ? `A(z) ${loadingDay} betöltése…`
                 : "A mai napra még nincs áhítat. Készíts egyet a fenti „Új áhítat készítése” panelen."}
             </p>
           </AdminPanel>
@@ -950,7 +949,7 @@ export function AdminDashboard({
             ) : (
               <AdminDevotionalList
                 items={upcomingItems}
-                selectedDayNumber={selectedDay}
+                selectedDate={selectedDay}
               onSelect={selectDay}
               onEdit={enterEditMode}
               onRegenerate={(day) => setConfirmRegenerateDay(day)}
@@ -978,7 +977,7 @@ export function AdminDashboard({
               <div className="px-2 pb-2">
                 <AdminDevotionalList
                   items={pastItems}
-                  selectedDayNumber={selectedDay}
+                  selectedDate={selectedDay}
               onSelect={selectDay}
               onEdit={enterEditMode}
               onRegenerate={(day) => setConfirmRegenerateDay(day)}
@@ -1035,7 +1034,7 @@ export function AdminDashboard({
               <AdminStatCard
                 label="Aktuális státusz"
                 value={currentStatusLabel}
-                hint={preview ? `${preview.dayNumber}. nap` : `${target.dayNumber}. nap cél`}
+                hint={preview ? preview.date : `${target.date} cél`}
               />
             </div>
     
@@ -1244,8 +1243,8 @@ export function AdminDashboard({
             onClose={() => setRefineDay(null)}
             onApplied={(d) => {
               mergeDevotional(d);
-              selectDay(d.dayNumber);
-              setToast(`${d.dayNumber}. nap finomítva és mentve (verziótörténet frissítve).`);
+              selectDay(d.date);
+              setToast(`${d.date}: finomítva és mentve (verziótörténet frissítve).`);
             }}
           />
         )}

@@ -15,7 +15,7 @@ async function main() {
       continue;
     }
 
-    console.log(`Keresés: ${d.dayNumber}. nap — ${d.title}`);
+    console.log(`Keresés: ${d.date} — ${d.title}`);
     const result = await autoAssignPexelsToDevotional(d);
 
     if (!result.assigned || !result.imageUrl) {
@@ -24,7 +24,7 @@ async function main() {
     }
 
     await saveDevotionalPexelsImage(
-      d.dayNumber,
+      d.date,
       {
         imageUrl: result.imageUrl,
         imageCredit: result.imageCredit!,

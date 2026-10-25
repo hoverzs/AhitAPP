@@ -4,7 +4,6 @@ import type { AdminDevotionalListItem, Devotional } from "./types";
 /** Könnyű index-sor → admin listasor (nincs szükség a teljes rekordra). */
 export function entryToListItem(entry: AdminIndexEntry): AdminDevotionalListItem {
   return {
-    dayNumber: entry.dayNumber,
     date: entry.date,
     title: entry.title,
     verse: entry.verse ?? "",
@@ -18,13 +17,12 @@ export function entryToListItem(entry: AdminIndexEntry): AdminDevotionalListItem
 
 /**
  * Index-sorból épített „csonk" rekord (üres tartalommal). Csak a generálási
- * cél és az admin kontextus számításához való (napszám, dátum, státusz,
+ * cél és az admin kontextus számításához való (dátum, státusz,
  * lastApiError) — megjelenítésre és mentésre soha nem használható.
  */
 export function entryToStub(entry: AdminIndexEntry): Devotional {
   const stamp = entry.generatedAt ?? entry.updatedAt ?? `${entry.date}T00:00:00.000Z`;
   return {
-    dayNumber: entry.dayNumber,
     date: entry.date,
     title: entry.title,
     verse: entry.verse ?? "",

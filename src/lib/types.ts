@@ -21,8 +21,7 @@ export interface DevotionalVersionSnapshot {
 }
 
 export interface Devotional {
-  dayNumber: number;
-  /** Naptári nap (YYYY-MM-DD) */
+  /** Naptári nap (YYYY-MM-DD) — az áhítat egyetlen azonosítója (nincs napszámozás). */
   date: string;
   title: string;
   verse: string;
@@ -54,7 +53,7 @@ export interface Devotional {
 }
 
 export interface GenerateRequestBody {
-  dayNumber: number;
+  date: string;
   verseText: string;
 }
 
@@ -65,7 +64,6 @@ export interface GeneratedDevotionalContent {
 
 /** Gemini dinamikus tervező teljes nap válasza */
 export interface DynamicPlannedDay {
-  dayNumber: number;
   title: string;
   verse: string;
   content: string;
@@ -121,7 +119,6 @@ export interface AdminDevotionalContext {
   model: string;
   generationTarget: {
     action: string;
-    dayNumber: number;
     date: string;
     blockedReason?: string;
   };
@@ -137,7 +134,6 @@ export interface AdminDevotionalContext {
 }
 
 export interface AdminDevotionalListItem {
-  dayNumber: number;
   date: string;
   title: string;
   verse: string;

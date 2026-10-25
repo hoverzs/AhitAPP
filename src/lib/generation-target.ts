@@ -2,16 +2,19 @@ import {
   isApprovedOrPublished,
   isPendingReview,
   normalizeDevotional,
+  normalizeDevotionalStatus,
 } from "./devotional-status";
 import { DEV_REVIEW_MODE } from "./dev-review";
 import { getAppTodayIso } from "./app-date";
+import { devotionalDateKey } from "./storage/devotional-validate";
 import type { Devotional } from "./types";
 
 export type GenerationAction = "create" | "update" | "skip" | "blocked";
 
+/** A generálás célja: egy naptári nap (nincs napszámozás). */
 export interface GenerationTarget {
   action: GenerationAction;
-  dayNumber: number;
+  /** A generálandó nap (YYYY-MM-DD). */
   date: string;
   existing?: Devotional;
   blockedReason?: string;
@@ -27,12 +30,17 @@ export function getDevotionalByDate(
   devotionals: Devotional[],
   date: string
 ): Devotional | undefined {
-  return devotionals.find((d) => (d.date ?? d.createdAt.slice(0, 10)) === date);
+  return devotionals.find((d) => devotionalDateKey(d) === date);
 }
 
-function nextSerialDayNumber(all: Devotional[]): number {
-  if (all.length === 0) return 1;
-  return Math.max(...all.map((d) => d.dayNumber)) + 1;
+function newestFirst(devotionals: Devotional[]): Devotional[] {
+  return [...devotionals].sort((a, b) =>
+    devotionalDateKey(b).localeCompare(devotionalDateKey(a))
+  );
+}
+
+function updateTarget(existing: Devotional): GenerationTarget {
+  return { action: "update", date: devotionalDateKey(existing), existing };
 }
 
 export function resolveManualGenerationTarget(
@@ -43,41 +51,20 @@ export function resolveManualGenerationTarget(
 
   if (!DEV_REVIEW_MODE) {
     const forToday = getDevotionalByDate(all, today);
-    if (forToday) {
-      return {
-        action: "update",
-        dayNumber: forToday.dayNumber,
-        date: forToday.date,
-        existing: forToday,
-      };
-    }
-    return {
-      action: "create",
-      dayNumber: nextSerialDayNumber(all),
-      date: today,
-    };
+    return forToday ? updateTarget(forToday) : { action: "create", date: today };
   }
 
-  const pending = all
-    .filter((d) => isPendingReview(d.status))
-    .sort((a, b) => b.dayNumber - a.dayNumber)[0];
+  const pending = newestFirst(all).find((d) =>
+    isPendingReview(normalizeDevotionalStatus(d.status))
+  );
+  if (pending) return updateTarget(pending);
 
-  if (pending) {
-    return {
-      action: "update",
-      dayNumber: pending.dayNumber,
-      date: pending.date,
-      existing: pending,
-    };
-  }
+  const latest = newestFirst(all)[0];
 
-  const latest = [...all].sort((a, b) => b.dayNumber - a.dayNumber)[0];
-
-  if (latest && !isApprovedOrPublished(latest.status)) {
+  if (latest && !isApprovedOrPublished(normalizeDevotionalStatus(latest.status))) {
     return {
       action: "blocked",
-      dayNumber: latest.dayNumber,
-      date: latest.date,
+      date: devotionalDateKey(latest),
       existing: latest,
       blockedReason:
         "A mai áhítat még nincs jóváhagyva. Fejlesztői módban nem generálunk további napokat.",
@@ -85,20 +72,7 @@ export function resolveManualGenerationTarget(
   }
 
   const forToday = getDevotionalByDate(all, today);
-  if (forToday) {
-    return {
-      action: "update",
-      dayNumber: forToday.dayNumber,
-      date: forToday.date,
-      existing: forToday,
-    };
-  }
-
-  return {
-    action: "create",
-    dayNumber: latest ? latest.dayNumber + 1 : 1,
-    date: today,
-  };
+  return forToday ? updateTarget(forToday) : { action: "create", date: today };
 }
 
 export function resolveAutoGenerationTarget(
@@ -111,8 +85,7 @@ export function resolveAutoGenerationTarget(
   if (existing) {
     return {
       action: "skip",
-      dayNumber: existing.dayNumber,
-      date: existing.date,
+      date: devotionalDateKey(existing),
       existing,
       skipReason: existing.editedByAdmin
         ? "Admin által szerkesztett tartalom — automatikus generálás kihagyva."
@@ -123,46 +96,32 @@ export function resolveAutoGenerationTarget(
   if (DEV_REVIEW_MODE) {
     const manual = resolveManualGenerationTarget(all);
     if (manual.action === "blocked") return manual;
-    if (manual.action === "update" && manual.existing?.date === date) {
+    if (manual.action === "update" && manual.existing && devotionalDateKey(manual.existing) === date) {
       return {
         action: "skip",
-        dayNumber: manual.dayNumber,
         date: manual.date,
         existing: manual.existing,
         skipReason: "Fejlesztői módban a mai áhítat már létezik (újragenerálás: admin gomb).",
       };
     }
-    return {
-      action: "create",
-      dayNumber: manual.dayNumber,
-      date: manual.date,
-    };
+    return { action: "create", date: manual.date };
   }
 
-  return {
-    action: "create",
-    dayNumber: nextSerialDayNumber(all),
-    date,
-  };
+  return { action: "create", date };
 }
 
 export function resolveRegenerateTarget(
   devotionals: Devotional[],
-  dayNumber: number
+  date: string
 ): GenerationTarget {
   const all = devotionals.map(normalizeDevotional);
-  const existing = all.find((d) => d.dayNumber === dayNumber);
+  const existing = getDevotionalByDate(all, date);
 
   if (!existing) {
-    throw new Error(`A ${dayNumber}. nap nem található.`);
+    throw new Error(`A(z) ${date} napi áhítat nem található.`);
   }
 
-  return {
-    action: "update",
-    dayNumber: existing.dayNumber,
-    date: existing.date,
-    existing,
-  };
+  return updateTarget(existing);
 }
 
 export function resolveGenerationTarget(

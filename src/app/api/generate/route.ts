@@ -34,12 +34,12 @@ export async function POST() {
       devotional: result.devotional,
       generation: {
         action: result.action,
-        dayNumber: result.targetDayNumber,
+        date: result.targetDate,
       },
       adminContext,
       memory: {
         previousCount: memoryBefore.totalPublished,
-        generatedDay: result.devotional.dayNumber,
+        generatedDate: result.devotional.date,
       },
     });
   } catch (err) {

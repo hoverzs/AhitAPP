@@ -6,8 +6,8 @@ export { GEMINI_SYSTEM_PROMPT } from "./prompts/gemini-system-prompt";
 /** @deprecated Használd a GEMINI_SYSTEM_PROMPT konstanst */
 export { GEMINI_SYSTEM_PROMPT as DEVOTIONAL_SYSTEM_PROMPT } from "./prompts/gemini-system-prompt";
 
-export function buildUserPrompt(verseText: string, dayNumber: number): string {
-  return `Nap száma: ${dayNumber}
+export function buildUserPrompt(verseText: string, date: string): string {
+  return `Dátum: ${date}
 Bibliai igehely és szövege: ${verseText}
 
 Csak egy érvényes JSON objektumot adj vissza — kezdd a { karakterrel, zárd a } karakterrel. Ne használj markdown kódblokkot.`;

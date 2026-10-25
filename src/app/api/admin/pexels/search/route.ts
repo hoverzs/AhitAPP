@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
-import { getDevotionalByDay } from "@/lib/devotionals";
+import { getDevotionalByDate } from "@/lib/devotionals";
 import { isPexelsConfigured, searchPexelsPhotos } from "@/lib/pexels";
 
 export const dynamic = "force-dynamic";
 
 interface SearchBody {
-  dayNumber?: number;
+  date?: string;
   query?: string;
   category?: string;
 }
@@ -37,8 +37,8 @@ export async function POST(request: Request) {
   let query = body.query?.trim() ?? "";
   let category = body.category?.trim();
 
-  if (body.dayNumber != null) {
-    const devotional = await getDevotionalByDay(body.dayNumber);
+  if (body.date != null) {
+    const devotional = await getDevotionalByDate(body.date);
     if (!devotional) {
       return NextResponse.json({ error: "Nem található áhítat." }, { status: 404 });
     }

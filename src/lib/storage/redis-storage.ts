@@ -17,7 +17,7 @@ import { invalidatePublicDevotionalsCache } from "./cache-tags";
 import { planRetention } from "./retention";
 import type { DevotionalStorage, GetLatestDevotionalsOptions } from "./types";
 
-/** Dátum index — score: dayNumber, member: YYYY-MM-DD */
+/** Dátum index — score: a nap sorszáma az epocha óta (dátum szerinti rendezés), member: YYYY-MM-DD */
 export const REDIS_DEVOTIONAL_INDEX_KEY = "ahitapp:devotional:index";
 export const REDIS_DEVOTIONAL_DATA_PREFIX = "ahitapp:devotional:data:";
 /** @deprecated Egyetlen blob — migrálás után törlődik */
@@ -53,6 +53,16 @@ function getRedisClient(): Redis {
     throw new Error("Redis client is not configured.");
   }
   return redisClient;
+}
+
+/** A dátum rendezési értéke az indexben (nincs napszámozás). */
+function dateScore(date: string): number {
+  const ms = Date.parse(`${date}T00:00:00Z`);
+  return Number.isFinite(ms) ? Math.floor(ms / 86_400_000) : 0;
+}
+
+function sortNewestFirst(list: Devotional[]): Devotional[] {
+  return list.sort((a, b) => devotionalDateKey(b).localeCompare(devotionalDateKey(a)));
 }
 
 function dataKey(date: string): string {
@@ -123,7 +133,7 @@ async function writeDevotionalRecord(
   const date = devotionalDateKey(normalized);
   await redis.set(dataKey(date), normalized);
   await redis.zadd(REDIS_DEVOTIONAL_INDEX_KEY, {
-    score: normalized.dayNumber,
+    score: dateScore(date),
     member: date,
   });
 }
@@ -282,7 +292,7 @@ async function readLatestFromRedis(
     if (parsed) devotionals.push(parsed);
   }
 
-  return devotionals.sort((a, b) => b.dayNumber - a.dayNumber);
+  return sortNewestFirst(devotionals);
 }
 
 /**
@@ -359,7 +369,7 @@ export const redisStorage: DevotionalStorage = {
         const parsed = parseStoredDevotional(raw);
         if (parsed) list.push(parsed);
       }
-      return list.sort((a, b) => b.dayNumber - a.dayNumber);
+      return sortNewestFirst(list);
     });
   },
 
@@ -367,33 +377,16 @@ export const redisStorage: DevotionalStorage = {
     return withRedisRetry("getDevotionalsFromDate", async () => {
       const redis = getRedisClient();
       await ensureRedisReady(redis);
-      const entries = await redis.zrange<(string | number)[]>(
-        REDIS_DEVOTIONAL_INDEX_KEY,
-        0,
-        -1,
-        { withScores: true }
-      );
-      let newestDate: string | null = null;
-      let newestScore = -Infinity;
-      const dates = new Set<string>();
-      for (let i = 0; i < entries.length; i += 2) {
-        const date = String(entries[i]);
-        const score = Number(entries[i + 1]);
-        if (score > newestScore) {
-          newestScore = score;
-          newestDate = date;
-        }
-        if (date >= minDate) dates.add(date);
-      }
-      if (newestDate) dates.add(newestDate);
-      if (dates.size === 0) return [];
-      const records = await redis.mget<unknown[]>(...[...dates].map(dataKey));
+      const all = await redis.zrange<string[]>(REDIS_DEVOTIONAL_INDEX_KEY, 0, -1);
+      const dates = all.map(String).filter((date) => date >= minDate);
+      if (dates.length === 0) return [];
+      const records = await redis.mget<unknown[]>(...dates.map(dataKey));
       const list: Devotional[] = [];
       for (const raw of records) {
         const parsed = parseStoredDevotional(raw);
         if (parsed) list.push(parsed);
       }
-      return list.sort((a, b) => b.dayNumber - a.dayNumber);
+      return sortNewestFirst(list);
     });
   },
 
@@ -407,11 +400,6 @@ export const redisStorage: DevotionalStorage = {
     const existingByDate = await redis.get(dataKey(date));
     if (existingByDate != null) {
       throw new Error(`Erre a napra (${date}) már van áhítat.`);
-    }
-
-    const all = await readLatestFromRedis();
-    if (all.some((d) => d.dayNumber === normalized.dayNumber)) {
-      throw new Error(`A ${normalized.dayNumber}. nap már létezik.`);
     }
 
     await writeDevotionalRecord(redis, normalized);
@@ -437,7 +425,7 @@ export const redisStorage: DevotionalStorage = {
     } else {
       await redis.set(dataKey(date), normalized);
       await redis.zadd(REDIS_DEVOTIONAL_INDEX_KEY, {
-        score: normalized.dayNumber,
+        score: dateScore(date),
         member: date,
       });
     }

@@ -18,7 +18,7 @@ export function buildDynamicPlannerUserPrompt(
 ): string {
   const wordCap = options?.shortened ? "350–450" : "500–700";
 
-  const base = `Generáld a ${memory.nextDayNumber}. nap áhítatát.
+  const base = `Generáld a(z) ${memory.targetDate} napi áhítatot.
 
 Új vers és téma (válassz változatos, nem sablonos alapigét):
 ${memory.summaryForPrompt}

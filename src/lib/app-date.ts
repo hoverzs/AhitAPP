@@ -51,6 +51,19 @@ export function getAppDateTimeParts(now = new Date()): {
   return { hour, minute };
 }
 
+/** Érvényes naptári nap-e (YYYY-MM-DD, létező hónap és nap)? */
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const parts = parseIsoDateParts(value);
+  if (!parts) return false;
+  const probe = new Date(Date.UTC(parts.year, parts.monthIndex, parts.day));
+  return (
+    probe.getUTCFullYear() === parts.year &&
+    probe.getUTCMonth() === parts.monthIndex &&
+    probe.getUTCDate() === parts.day
+  );
+}
+
 export function parseIsoDateParts(iso: string): AppDateParts | null {
   const m = ISO_DATE_RE.exec(iso.trim());
   if (!m) return null;

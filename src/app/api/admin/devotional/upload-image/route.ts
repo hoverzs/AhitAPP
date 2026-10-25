@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidIsoDate } from "@/lib/app-date";
 import { isAdminAuthenticated } from "@/lib/auth";
 import {
   ImageUploadError,
@@ -25,11 +26,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Érvénytelen form adat." }, { status: 400 });
   }
 
-  const dayNumber = Number(formData.get("dayNumber"));
+  const date = formData.get("date");
   const file = formData.get("file");
 
-  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
-    return NextResponse.json({ error: "Érvénytelen dayNumber." }, { status: 400 });
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   if (!(file instanceof File)) {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const result = await uploadDevotionalImage({ dayNumber, bytes });
+    const result = await uploadDevotionalImage({ date, bytes });
     return NextResponse.json(result);
   } catch (err) {
     if (err instanceof ImageUploadError) {

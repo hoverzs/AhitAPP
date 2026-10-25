@@ -29,7 +29,6 @@ export interface CronGenerateResult {
   date: string;
   timestamp: string;
   devotional?: {
-    dayNumber: number;
     date: string;
     title: string;
     status?: string;
@@ -53,14 +52,14 @@ function cronWarn(message: string, meta?: Record<string, unknown>): void {
 }
 
 function logPexelsResult(devotional: {
-  dayNumber: number;
+  date: string;
   imageUrl?: string;
   imageSource?: string;
   pexelsPhotoId?: number;
 }): void {
   if (devotional.imageUrl && devotional.imageSource?.startsWith("pexels")) {
     cronLog("Pexels kép sikeresen hozzárendelve", {
-      dayNumber: devotional.dayNumber,
+      date: devotional.date,
       imageSource: devotional.imageSource,
       pexelsPhotoId: devotional.pexelsPhotoId,
     });
@@ -69,11 +68,11 @@ function logPexelsResult(devotional: {
 
   if (isPexelsConfigured()) {
     cronWarn("Pexels: nincs megfelelő kép — fallback kép lesz a publikus oldalon", {
-      dayNumber: devotional.dayNumber,
+      date: devotional.date,
     });
   } else {
     cronWarn("Pexels: API kulcs nincs beállítva — fallback kép lesz a publikus oldalon", {
-      dayNumber: devotional.dayNumber,
+      date: devotional.date,
     });
   }
 }
@@ -113,16 +112,15 @@ export async function runDailyCronGeneration(options?: {
       const d = dueRetry.devotional;
       logPexelsResult(d);
       cronLog("Esedékes óránkénti retry sikeres", {
-        dayNumber: d.dayNumber,
+        date: d.date,
         retry_count: dueRetry.job.retry_count,
       });
       return {
         outcome: dueRetry.skipped ? "skipped" : "created",
-        message: `A ${d.dayNumber}. nap (${d.date}) sikeresen generálva (ütemezett retry).`,
+        message: `A(z) ${d.date} napi áhítat sikeresen generálva (ütemezett retry).`,
         date,
         timestamp,
         devotional: {
-          dayNumber: d.dayNumber,
           date: d.date,
           title: d.title,
           status: d.status,
@@ -146,7 +144,6 @@ export async function runDailyCronGeneration(options?: {
       cronLog(
         truncated ? "Generálás kész — félbeszakadt, ellenőrzés szükséges" : "Sikeres generálás és közzététel",
         {
-          dayNumber: d.dayNumber,
           date: d.date,
           status: d.status,
           title: d.title,
@@ -157,14 +154,13 @@ export async function runDailyCronGeneration(options?: {
       return {
         outcome: attempt.skipped ? "skipped" : "created",
         message: truncated
-          ? `A ${d.dayNumber}. nap (${d.date}) generálva — ${TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE}`
+          ? `A(z) ${d.date} napi áhítat generálva — ${TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE}`
           : attempt.skipped
-            ? `Már van áhítat: ${d.dayNumber}. nap — „${d.title}”.`
-            : `A ${d.dayNumber}. nap (${d.date}) sikeresen generálva és közzétéve.`,
+            ? `Már van áhítat (${d.date}): „${d.title}”.`
+            : `A(z) ${d.date} napi áhítat sikeresen generálva és közzétéve.`,
         date,
         timestamp,
         devotional: {
-          dayNumber: d.dayNumber,
           date: d.date,
           title: d.title,
           status: d.status,
@@ -182,13 +178,12 @@ export async function runDailyCronGeneration(options?: {
       return {
         outcome: "skipped",
         message: existing
-          ? `Már van áhítat: ${existing.dayNumber}. nap — „${existing.title}”.`
+          ? `Már van áhítat (${existing.date}): „${existing.title}”.`
           : "Generálás kihagyva.",
         date,
         timestamp,
         devotional: existing
           ? {
-              dayNumber: existing.dayNumber,
               date: existing.date,
               title: existing.title,
               status: existing.status,
@@ -248,20 +243,18 @@ export async function runDailyCronGeneration(options?: {
       cronLog("Már létezik áhítat erre a napra — kihagyva (nincs felülírás)", {
         date,
         reason: error.reason,
-        dayNumber: existing?.dayNumber,
         title: existing?.title,
       });
 
       return {
         outcome: "skipped",
         message: existing
-          ? `Már van áhítat: ${existing.dayNumber}. nap — „${existing.title}”.`
+          ? `Már van áhítat (${existing.date}): „${existing.title}”.`
           : error.reason,
         date,
         timestamp,
         devotional: existing
           ? {
-              dayNumber: existing.dayNumber,
               date: existing.date,
               title: existing.title,
               status: existing.status,

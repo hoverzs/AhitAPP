@@ -16,15 +16,14 @@ import { mapVercelBlobError } from "../src/lib/storage/blob/vercel-client";
 import type { Devotional } from "../src/lib/types";
 
 function devotional(
-  dayNumber: number,
+  n: number,
   date: string,
   overrides: Partial<Devotional> = {}
 ): Devotional {
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: `## Tartalom\n\nSzöveg ${date}`,
     imageUrl: "",
     createdAt: `${date}T08:00:00.000Z`,
@@ -61,7 +60,7 @@ test("mentés: rekord, index, pillanatkép és meta jön létre, list nélkül",
   assert.equal(client.ops.advanced, 4);
 });
 
-test("duplikált dátum és napszám elutasítva", async () => {
+test("duplikált dátum elutasítva; azonos \"sorszámú\" cím más napon engedélyezett", async () => {
   const { storage } = setup();
   await storage.saveDevotional(devotional(1, "2026-10-24"));
 
@@ -69,10 +68,7 @@ test("duplikált dátum és napszám elutasítva", async () => {
     storage.saveDevotional(devotional(2, "2026-10-24")),
     /már van áhítat/
   );
-  await assert.rejects(
-    storage.saveDevotional(devotional(1, "2026-10-25")),
-    /már létezik/
-  );
+  await storage.saveDevotional(devotional(1, "2026-10-25")); // nincs napszám-egyediség
 });
 
 test("a pillanatkép nem tartalmaz versionHistory-t, a rekord igen", async () => {
@@ -152,7 +148,6 @@ test("index-ütközésnél újraolvas és egyesít (nincs elveszett bejegyzés)"
       const doc = JSON.parse(client.peek(BLOB_PATHS.index)!);
       doc.entries.push({
         date: "2026-10-23",
-        dayNumber: 99,
         status: "published",
         title: "Másik író",
       });
@@ -192,7 +187,7 @@ test("párhuzamos mentések: minden bejegyzés bekerül az indexbe és a pillana
   const window = JSON.parse(client.peek(BLOB_PATHS.publicWindow)!);
   assert.equal(window.devotionals.length, 5);
   const meta = JSON.parse(client.peek(BLOB_PATHS.meta)!);
-  assert.equal(meta.maxDayNumber, 5);
+  assert.equal(meta.recentDays.length, 5);
 });
 
 test("dátumváltoztatás áthelyezi a rekordot", async () => {
@@ -227,22 +222,22 @@ test("törlés eltávolítja a rekordot, az indexet és a pillanatképet", async
   await assert.rejects(storage.deleteDevotional("2026-10-23"), /Nincs áhítat/);
 });
 
-test("admin munkakészlet: cutoff utáni + jövőbeli + a legnagyobb napszámú rekord", async () => {
+test("admin munkakészlet: cutoff utáni + jövőbeli rekordok, régi nem", async () => {
   const { storage } = setup();
   await storage.saveDevotional(devotional(1, "2026-09-01"));
   await storage.saveDevotional(devotional(2, "2026-10-20"));
   await storage.saveDevotional(devotional(3, "2026-10-26", { status: "draft" }));
 
   const fromCutoff = await storage.getDevotionalsFromDate("2026-10-17");
-  assert.deepEqual(fromCutoff.map((d) => d.dayNumber), [3, 2]);
+  assert.deepEqual(fromCutoff.map((d) => d.title), ["Cím 3", "Cím 2"]);
 
-  // Ha a legnagyobb napszámú rekord régi, akkor is bekerül (napszámozás).
+  // A régi rekord nem kerül be (nincs „legutóbbi mindig marad” kivétel).
   const { storage: s2 } = setup();
   await s2.saveDevotional(devotional(5, "2026-08-01"));
-  assert.deepEqual((await s2.getDevotionalsFromDate("2026-10-17")).map((d) => d.dayNumber), [5]);
+  assert.deepEqual((await s2.getDevotionalsFromDate("2026-10-17")).map((d) => d.title), []);
 
   const byDates = await storage.getDevotionalsByDates(["2026-10-20", "2026-01-01"]);
-  assert.deepEqual(byDates.map((d) => d.dayNumber), [2]);
+  assert.deepEqual(byDates.map((d) => d.title), ["Cím 2"]);
 });
 
 test("napváltás írás nélkül: a mai és a 7 napos ablak a dátumból adódik", async () => {
@@ -301,7 +296,6 @@ test("rebuild(): index, pillanatkép és meta nélkül is újraépül, a meta ne
   // A régi, már törölt napok emlékezete a metában él.
   const meta = JSON.parse(client.peek(BLOB_PATHS.meta)!) as StorageMeta;
   meta.usedVerseReferences.push("Máté 5:3");
-  meta.maxDayNumber = 120;
   client.seed(BLOB_PATHS.meta, JSON.stringify(meta));
 
   client.remove(BLOB_PATHS.index);
@@ -312,11 +306,10 @@ test("rebuild(): index, pillanatkép és meta nélkül is újraépül, a meta ne
   assert.equal((await storage.getLatestDevotionals()).length, 2);
   assert.equal((await storage.getPublicWindowDevotionals())?.length, 2);
   const rebuilt = await storage.getMeta();
-  assert.equal(rebuilt?.maxDayNumber, 120);
   assert.ok(rebuilt?.usedVerseReferences.includes("Máté 5:3"));
 });
 
-test("meta: legnagyobb napszám, egyedi igehelyek, recentDays legfeljebb 21", async () => {
+test("meta: egyedi igehelyek, recentDays legfeljebb 21, dátum szerint", async () => {
   const { storage } = setup();
   for (let day = 1; day <= 30; day++) {
     const date = `2026-10-${String(day).padStart(2, "0")}`;
@@ -326,9 +319,8 @@ test("meta: legnagyobb napszám, egyedi igehelyek, recentDays legfeljebb 21", as
   }
 
   const meta = await storage.getMeta();
-  assert.equal(meta?.maxDayNumber, 30);
   assert.equal(meta?.recentDays.length, 21);
-  assert.equal(meta?.recentDays[0].dayNumber, 10);
+  assert.equal(meta?.recentDays[0].date, "2026-10-10");
   assert.equal(meta?.usedVerseReferences.filter((v) => v === "Róma 8:28").length, 1);
 });
 

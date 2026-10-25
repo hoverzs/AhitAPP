@@ -17,15 +17,14 @@ import type { Devotional } from "../src/lib/types";
 const TODAY = "2026-10-24"; // cutoff (7 nap): 2026-10-17
 
 function devotional(
-  dayNumber: number,
+  n: number,
   date: string,
   overrides: Partial<Devotional> = {}
 ): Devotional {
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: `## Tartalom\n\nSzöveg ${date}`,
     imageUrl: "",
     createdAt: `${date}T08:00:00.000Z`,
@@ -130,15 +129,15 @@ test("retention törlés: rekord, feladat, saját kép törlődik; külső kép,
   assert.ok(client.ops.simple <= 3, `egyszerű: ${client.ops.simple}`);
 });
 
-test("retention: a legfrissebb rekord akkor is marad, ha minden régi", async () => {
+test("retention: ha minden közzétett rekord régi, mind törölhető (nincs kivétel a legfrissebbre)", async () => {
   const client = new MemoryBlobClient();
   const storage = createBlobStorage(client, { today: () => TODAY });
   await storage.saveDevotional(devotional(8, "2026-08-01"));
   await storage.saveDevotional(devotional(9, "2026-08-02"));
 
   const result = await storage.runRetention({ apply: true });
-  assert.deepEqual(result.removable, ["2026-08-01"]);
-  assert.equal(client.has(BLOB_PATHS.record("2026-08-02")), true); // napszámozáshoz
+  assert.deepEqual(result.removable, ["2026-08-01", "2026-08-02"]);
+  assert.equal(client.has(BLOB_PATHS.record("2026-08-02")), false);
 });
 
 test("retention kikapcsolva (DEVOTIONAL_RETENTION_DAYS=0): semmi nem jelölt", async () => {
@@ -165,7 +164,6 @@ test("egyidejű írás: a retention közben érkező új bejegyzés nem vész el
       const doc = JSON.parse(client.peek(BLOB_PATHS.index)!);
       doc.entries.push({
         date: "2026-10-25",
-        dayNumber: 7,
         status: "draft",
         title: "Közben érkezett",
         imageUrl: "",
@@ -264,32 +262,29 @@ test("a törölt napok emlékezete (meta) a generálási memóriában megmarad",
   await storage.runRetention({ apply: true });
 
   const remaining = await storage.getLatestDevotionals();
-  assert.equal(remaining.some((d) => d.dayNumber === 1), false); // a 1. nap törölve
+  assert.equal(remaining.some((d) => d.title === "Cím 1"), false); // az 1. nap törölve
 
   const meta = await storage.getMeta();
   const merged = mergeStoredMetaIntoMemory(
-    buildDevotionalMemory(remaining, { nextDayNumber: 7 }),
+    buildDevotionalMemory(remaining, { targetDate: "2026-10-27" }),
     meta
   );
   assert.ok(merged.usedVerseReferences.includes("Róma 1:1"), "a törölt 1. nap igehelye használtnak számít");
   assert.ok(merged.usedTitles.includes("Cím 1"));
-  assert.equal(merged.nextDayNumber, 7); // a generálási cél nem változik
-  assert.ok(merged.maxDayNumber >= 6);
+  assert.equal(merged.targetDate, "2026-10-27"); // a generálási cél a dátum
 });
 
 test("mergeStoredMetaIntoMemory: unió, sorrend, recentDays korlát, összefoglaló frissül", () => {
   const history = [devotional(30, "2026-10-24", { verse: "Ján 3:16 — x", category: "Remény" })];
-  const memory = buildDevotionalMemory(history, { nextDayNumber: 31 });
+  const memory = buildDevotionalMemory(history, { targetDate: "2026-10-25" });
 
   const recent = Array.from({ length: 25 }, (_, i) => ({
-    dayNumber: i + 1,
+    date: `2026-01-${String(i + 1).padStart(2, "0")}`,
     title: `T${i + 1}`,
     verseReference: `V${i + 1}`,
     category: "Hit",
-    createdAt: "2026-01-01T00:00:00Z",
   }));
   const merged = mergeStoredMetaIntoMemory(memory, {
-    maxDayNumber: 29,
     usedVerseReferences: ["Máté 5:3", "Ján 3:16"],
     usedTitles: ["Régi cím"],
     usedCategories: ["Hit"],
@@ -299,9 +294,8 @@ test("mergeStoredMetaIntoMemory: unió, sorrend, recentDays korlát, összefogla
   assert.deepEqual(merged.usedVerseReferences, ["Máté 5:3", "Ján 3:16"]); // nincs duplikátum
   assert.deepEqual(merged.usedCategories, ["Hit", "Remény"]);
   assert.equal(merged.recentDays.length, 21);
-  assert.equal(merged.recentDays.at(-1)?.dayNumber, 30);
-  assert.equal(merged.maxDayNumber, 30);
-  assert.equal(merged.nextDayNumber, 31);
+  assert.equal(merged.recentDays.at(-1)?.date, "2026-10-24");
+  assert.equal(merged.targetDate, "2026-10-25");
   assert.ok(merged.summaryForPrompt.includes("Régi cím"));
   assert.ok(merged.summaryForPrompt.includes("Legutóbbi kategóriák: Hit, Remény"));
 

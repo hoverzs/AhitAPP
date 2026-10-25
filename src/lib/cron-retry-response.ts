@@ -11,7 +11,7 @@ export interface RetryProcessorJsonResponse {
   retryCount: number;
   autoRetryCount?: number;
   code?: string;
-  dayNumber?: number;
+  date?: string;
 }
 
 function jobFields(job: DailyGenerationJob | null | undefined): Pick<
@@ -48,12 +48,12 @@ export function buildRetryProcessorResponse(
       processed: true,
       status: result.job.status,
       message: result.skipped
-        ? `Már publikálva: ${result.devotional.dayNumber}. nap`
-        : `Sikeres generálás: ${result.devotional.dayNumber}. nap — „${result.devotional.title}”`,
+        ? `Már publikálva: ${result.devotional.date}`
+        : `Sikeres generálás: ${result.devotional.date} — „${result.devotional.title}”`,
       nextRetryAt: null,
       retryCount: result.job.retry_count,
       autoRetryCount: result.job.auto_retry_count,
-      dayNumber: result.devotional.dayNumber,
+      date: result.devotional.date,
     };
   }
 

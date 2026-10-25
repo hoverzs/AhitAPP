@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import {
-  getDevotionalByDay,
+  getDevotionalByDate,
   saveDevotionalManualImage,
 } from "./devotionals";
 import { devotionalDateKey, getImageStore, resolveStorageDriver } from "./storage";
@@ -51,10 +51,10 @@ export function sniffImageType(bytes: Uint8Array): SniffedImageType | null {
  *  - Helyi / Redis meghajtó: a korábbi viselkedés (public/images/devotionals).
  */
 export async function uploadDevotionalImage(input: {
-  dayNumber: number;
+  date: string;
   bytes: Uint8Array;
 }): Promise<{ devotional: Devotional; imageUrl: string }> {
-  const { dayNumber, bytes } = input;
+  const { date, bytes } = input;
 
   if (bytes.byteLength === 0) {
     throw new ImageUploadError("Üres fájl.", 400);
@@ -67,7 +67,7 @@ export async function uploadDevotionalImage(input: {
     throw new ImageUploadError("Csak JPG, PNG vagy WebP tölthető fel.", 400);
   }
 
-  const existing = await getDevotionalByDay(dayNumber);
+  const existing = await getDevotionalByDate(date);
   if (!existing) {
     throw new ImageUploadError("Nem található.", 404);
   }
@@ -81,11 +81,11 @@ export async function uploadDevotionalImage(input: {
       );
     }
 
-    const pathname = `images/${devotionalDateKey(existing)}/day-${dayNumber}.${type.ext}`;
+    const pathname = `images/${devotionalDateKey(existing)}/devotional.${type.ext}`;
     const { url } = await store.put(pathname, bytes, type.mime);
 
     try {
-      const devotional = await saveDevotionalManualImage(dayNumber, url);
+      const devotional = await saveDevotionalManualImage(date, url);
       return { devotional, imageUrl: url };
     } catch (error) {
       try {
@@ -99,9 +99,9 @@ export async function uploadDevotionalImage(input: {
 
   const dir = path.join(process.cwd(), "public", "images", "devotionals");
   await fs.mkdir(dir, { recursive: true });
-  const filename = `day-${dayNumber}-${Date.now()}.${type.ext}`;
+  const filename = `${date}-${Date.now()}.${type.ext}`;
   await fs.writeFile(path.join(dir, filename), Buffer.from(bytes));
   const imageUrl = `/images/devotionals/${filename}`;
-  const devotional = await saveDevotionalManualImage(dayNumber, imageUrl);
+  const devotional = await saveDevotionalManualImage(date, imageUrl);
   return { devotional, imageUrl };
 }

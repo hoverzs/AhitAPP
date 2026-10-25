@@ -302,7 +302,7 @@ export function AdminDevotionalImagePanel({
     setSearchError(null);
     setSearchQuery(null);
     setResultsVisible(false);
-  }, [devotional.dayNumber, devotional.imageKeywords]);
+  }, [devotional.date, devotional.imageKeywords]);
 
   const scrollToSearch = useCallback(() => {
     searchRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -326,7 +326,7 @@ export function AdminDevotionalImagePanel({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              dayNumber: devotional.dayNumber,
+              date: devotional.date,
               action: "save_image_keywords",
               imageKeywords: trimmed,
             }),
@@ -337,7 +337,7 @@ export function AdminDevotionalImagePanel({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            dayNumber: devotional.dayNumber,
+            date: devotional.date,
             query: trimmed,
             category: devotional.category,
           }),
@@ -367,7 +367,7 @@ export function AdminDevotionalImagePanel({
         setSearchLoading(false);
       }
     },
-    [devotional.category, devotional.dayNumber, devotional.imageKeywords, keywords]
+    [devotional.category, devotional.date, devotional.imageKeywords, keywords]
   );
 
   const handleChipClick = useCallback(
@@ -395,7 +395,7 @@ export function AdminDevotionalImagePanel({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dayNumber: devotional.dayNumber,
+          date: devotional.date,
           action: "select_pexels_image",
           image: {
             imageUrl: photo.imageUrl,
@@ -431,7 +431,7 @@ export function AdminDevotionalImagePanel({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dayNumber: devotional.dayNumber,
+          date: devotional.date,
           action: "auto_select_pexels",
         }),
       });
@@ -462,7 +462,7 @@ export function AdminDevotionalImagePanel({
 
     try {
       const formData = new FormData();
-      formData.append("dayNumber", String(devotional.dayNumber));
+      formData.append("date", String(devotional.date));
       formData.append("file", file);
 
       const res = await fetch("/api/admin/devotional/upload-image", {
@@ -498,7 +498,7 @@ export function AdminDevotionalImagePanel({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          dayNumber: devotional.dayNumber,
+          date: devotional.date,
           action: "remove_image",
         }),
       });

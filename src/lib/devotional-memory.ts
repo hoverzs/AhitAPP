@@ -1,17 +1,18 @@
+import { devotionalDateKey } from "./storage/devotional-validate";
 import type { Devotional } from "./types";
 
+/** Egy korábbi nap rövid emléke — dátum szerint azonosítva (nincs napszámozás). */
 export interface HistoricalDayEntry {
-  dayNumber: number;
+  date: string;
   title: string;
   verseReference: string;
   category: string;
-  createdAt: string;
 }
 
 export interface DevotionalMemory {
   totalPublished: number;
-  maxDayNumber: number;
-  nextDayNumber: number;
+  /** A generálandó nap dátuma (YYYY-MM-DD). */
+  targetDate: string;
   usedVerseReferences: string[];
   usedTitles: string[];
   usedCategories: string[];
@@ -66,7 +67,6 @@ export function isVerseReferenceUsed(
 
 /** A tároló rekordokon túli előzménye (Blob meta.json) — a törölt napok emlékezete. */
 export interface StoredMemoryMeta {
-  maxDayNumber: number;
   usedVerseReferences: string[];
   usedTitles: string[];
   usedCategories: string[];
@@ -80,10 +80,28 @@ function unionKeepingOrder(stored: string[], current: string[]): string[] {
   return [...stored, ...current.filter((c) => !seen.has(c))];
 }
 
+function summaryFor(memory: Omit<DevotionalMemory, "summaryForPrompt">): string {
+  return JSON.stringify(
+    {
+      totalPublished: memory.totalPublished,
+      targetDate: memory.targetDate,
+      usedTitles: memory.usedTitles,
+      usedCategories: memory.usedCategories,
+      recentDays: memory.recentDays,
+      thematicHint:
+        memory.usedCategories.length > 0
+          ? `Legutóbbi kategóriák: ${memory.usedCategories.slice(-5).join(", ")}`
+          : "Még nincs korábbi kategória — kezdd egy erős bevezető héttémával (pl. Önreflexió).",
+    },
+    null,
+    2
+  );
+}
+
 /**
  * A rekordokból épített memóriát kiegészíti a tárolt előzménnyel, hogy a már
  * törölt napok igehelyei, címei és kategóriái továbbra is számítsanak az
- * ismétlés-védelemben. A nextDayNumber (generálási cél) változatlan marad.
+ * ismétlés-védelemben. A célnap (targetDate) változatlan marad.
  */
 export function mergeStoredMetaIntoMemory(
   memory: DevotionalMemory,
@@ -98,87 +116,51 @@ export function mergeStoredMetaIntoMemory(
   const usedTitles = unionKeepingOrder(meta.usedTitles, memory.usedTitles);
   const usedCategories = unionKeepingOrder(meta.usedCategories, memory.usedCategories);
 
-  const byDay = new Map<number, HistoricalDayEntry>();
-  for (const d of meta.recentDays ?? []) byDay.set(d.dayNumber, d);
-  for (const d of memory.recentDays) byDay.set(d.dayNumber, d);
-  const recentDays = [...byDay.values()]
-    .sort((a, b) => a.dayNumber - b.dayNumber)
+  const byDate = new Map<string, HistoricalDayEntry>();
+  for (const d of meta.recentDays ?? []) byDate.set(d.date, d);
+  for (const d of memory.recentDays) byDate.set(d.date, d);
+  const recentDays = [...byDate.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
     .slice(-RECENT_DAYS_LIMIT);
 
-  const maxDayNumber = Math.max(memory.maxDayNumber, meta.maxDayNumber);
-
-  const summary = {
+  const merged = {
     totalPublished: memory.totalPublished,
-    maxDayNumber,
-    nextDayNumber: memory.nextDayNumber,
-    usedTitles,
-    usedCategories,
-    recentDays,
-    thematicHint:
-      usedCategories.length > 0
-        ? `Legutóbbi kategóriák: ${usedCategories.slice(-5).join(", ")}`
-        : "Még nincs korábbi kategória — kezdd egy erős bevezető héttémával (pl. Önreflexió).",
-  };
-
-  return {
-    ...memory,
-    maxDayNumber,
+    targetDate: memory.targetDate,
     usedVerseReferences,
     usedTitles,
     usedCategories,
     recentDays,
-    summaryForPrompt: JSON.stringify(summary, null, 2),
   };
+  return { ...merged, summaryForPrompt: summaryFor(merged) };
 }
 
 export function buildDevotionalMemory(
   devotionals: Devotional[],
-  options?: { nextDayNumber?: number }
+  options: { targetDate: string }
 ): DevotionalMemory {
-  const sorted = [...devotionals].sort((a, b) => a.dayNumber - b.dayNumber);
-  const maxDayNumber =
-    sorted.length > 0 ? Math.max(...sorted.map((d) => d.dayNumber)) : 0;
-  const nextDayNumber = options?.nextDayNumber ?? maxDayNumber + 1;
+  const sorted = [...devotionals].sort((a, b) =>
+    devotionalDateKey(a).localeCompare(devotionalDateKey(b))
+  );
 
-  const recentDays: HistoricalDayEntry[] = sorted.slice(-21).map((d) => ({
-    dayNumber: d.dayNumber,
+  const recentDays: HistoricalDayEntry[] = sorted.slice(-RECENT_DAYS_LIMIT).map((d) => ({
+    date: devotionalDateKey(d),
     title: d.title,
     verseReference: extractVerseReference(d.verse),
     category: d.category ?? "—",
-    createdAt: d.createdAt,
   }));
 
-  const usedVerseReferences = [
-    ...new Set(sorted.map((d) => extractVerseReference(d.verse))),
-  ];
-  const usedTitles = [...new Set(sorted.map((d) => d.title))];
-  const usedCategories = [
-    ...new Set(
-      sorted.map((d) => d.category).filter((c): c is string => Boolean(c?.trim()))
-    ),
-  ];
-
-  const historical_data_summary = {
+  const base = {
     totalPublished: sorted.length,
-    maxDayNumber,
-    nextDayNumber,
-    usedTitles,
-    usedCategories,
+    targetDate: options.targetDate,
+    usedVerseReferences: [...new Set(sorted.map((d) => extractVerseReference(d.verse)))],
+    usedTitles: [...new Set(sorted.map((d) => d.title))],
+    usedCategories: [
+      ...new Set(
+        sorted.map((d) => d.category).filter((c): c is string => Boolean(c?.trim()))
+      ),
+    ],
     recentDays,
-    thematicHint:
-      usedCategories.length > 0
-        ? `Legutóbbi kategóriák: ${usedCategories.slice(-5).join(", ")}`
-        : "Még nincs korábbi kategória — kezdd egy erős bevezető héttémával (pl. Önreflexió).",
   };
 
-  return {
-    totalPublished: sorted.length,
-    maxDayNumber,
-    nextDayNumber,
-    usedVerseReferences,
-    usedTitles,
-    usedCategories,
-    recentDays,
-    summaryForPrompt: JSON.stringify(historical_data_summary, null, 2),
-  };
+  return { ...base, summaryForPrompt: summaryFor(base) };
 }

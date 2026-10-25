@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidIsoDate } from "@/lib/app-date";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { logGeminiError } from "@/lib/gemini-client";
 import {
@@ -12,7 +13,7 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 interface RefinePreviewBody {
-  dayNumber?: number;
+  date?: string;
   instruction?: string;
   updateImageKeywords?: boolean;
 }
@@ -29,11 +30,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Érvénytelen JSON." }, { status: 400 });
   }
 
-  const dayNumber = body.dayNumber;
+  const date = body.date;
   const instruction = body.instruction?.trim();
 
-  if (!Number.isFinite(dayNumber) || (dayNumber ?? 0) < 1) {
-    return NextResponse.json({ error: "Érvénytelen dayNumber." }, { status: 400 });
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   if (!instruction) {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await previewDevotionalRefinement(dayNumber!, instruction, {
+    const result = await previewDevotionalRefinement(date, instruction, {
       updateImageKeywords: body.updateImageKeywords === true,
     });
 

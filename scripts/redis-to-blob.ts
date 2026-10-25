@@ -15,7 +15,7 @@
  *    --verify --from-file=...        csak ellenőrzi a Blobot a fájlhoz képest
  *
  * 3) B forgatókönyv (a Redis nem érhető el, tiszta lap):
- *      npx tsx scripts/redis-to-blob.ts --seed-meta --max-day=<utolsó napszám> [--used-verses-file=igek.txt] --confirm=SEED-<n>
+ *      npx tsx scripts/redis-to-blob.ts --seed-meta [--used-verses-file=igek.txt] --confirm=SEED
  *    Beállítja az utolsó napszámot (a /nap/<n> linkek folytonosságához) és
  *    opcionálisan a már használt igehelyeket (soronként egy).
  *
@@ -71,13 +71,13 @@ function printPlan(plan: MigrationPlan) {
   console.log(`Rekordok a forrásban:      ${plan.totalRecords}`);
   console.log(`ÁTVITELRE KERÜL:           ${plan.toImport.length}`);
   for (const d of plan.toImport) {
-    console.log(`  #${d.dayNumber}  ${d.date ?? ""}  ${d.status ?? "published"}  ${d.title}`);
+    console.log(`  ${d.date ?? ""}  ${d.status ?? "published"}  ${d.title}`);
   }
   console.log(`Átvitel nélkül (régi, közzétett): ${plan.skippedOldPublished.length}`);
   if (plan.oldUnpublishedKept.length) {
     console.log(`Régi, de nem közzétett (átkerül): ${plan.oldUnpublishedKept.join(", ")}`);
   }
-  console.log(`Legutóbbi nap:             ${plan.newestDate ?? "-"} (napszám: ${plan.maxDayNumber})`);
+  console.log(`Legutóbbi nap:             ${plan.newestDate ?? "-"}`);
   console.log(
     `Meta (törölt napok emlékezete): ${plan.meta.usedVerseReferences?.length ?? 0} igehely, ` +
       `${plan.meta.usedTitles?.length ?? 0} cím, ${plan.meta.usedCategories?.length ?? 0} kategória`
@@ -212,28 +212,22 @@ async function runImport() {
   process.exit(verified.ok ? 0 : 1);
 }
 
-/** 3) Tiszta lap: csak az utolsó napszám és a használt igehelyek. */
+/** 3) Tiszta lap: csak a (nem kötelező) használt igehelyek; napszám nincs. */
 async function runSeedMeta() {
-  const maxDay = Number(arg("max-day"));
-  if (!Number.isInteger(maxDay) || maxDay < 0) {
-    console.error("Add meg az utolsó napszámot: --max-day=<szám>");
-    process.exit(1);
-  }
   const versesFile = arg("used-verses-file");
   const verses = versesFile
     ? readFileSync(versesFile, "utf-8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
     : [];
 
   const storage = openBlobStorage();
-  console.log(`Seed: utolsó napszám = ${maxDay}, használt igehelyek: ${verses.length}`);
-  console.log("A következő generált nap napszáma: " + (maxDay + 1));
+  console.log(`Seed: használt igehelyek: ${verses.length}`);
 
-  if (arg("confirm") !== `SEED-${maxDay}`) {
-    console.log(`\nSZÁRAZ PRÓBA — nem írt semmit. Íráshoz: --confirm=SEED-${maxDay}`);
+  if (arg("confirm") !== "SEED") {
+    console.log(`\nSZÁRAZ PRÓBA — nem írt semmit. Íráshoz: --confirm=SEED`);
     return;
   }
-  const meta = await storage.mergeMeta({ maxDayNumber: maxDay, usedVerseReferences: verses });
-  console.log(`Meta beállítva: maxDayNumber=${meta.maxDayNumber}, igehelyek=${meta.usedVerseReferences.length}`);
+  const meta = await storage.mergeMeta({ usedVerseReferences: verses });
+  console.log(`Meta beállítva: igehelyek=${meta.usedVerseReferences.length}`);
 }
 
 async function main() {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidIsoDate } from "@/lib/app-date";
 import { isAdminAuthenticated } from "@/lib/auth";
 import {
   saveDevotionalAdminEdit,
@@ -7,7 +8,7 @@ import {
   saveDevotionalImageKeywords,
   clearDevotionalImage,
   updateDevotionalStatus,
-  getDevotionalByDay,
+  getDevotionalByDate,
 } from "@/lib/devotionals";
 import { isHeroImageUrl } from "@/lib/image-assets";
 import {
@@ -42,7 +43,7 @@ interface PexelsImageSelection {
 }
 
 interface AdminDevotionalBody {
-  dayNumber: number;
+  date: string;
   action: AdminAction;
   fields?: Partial<EditableDevotionalFields>;
   patch?: Partial<EditableDevotionalFields>;
@@ -50,19 +51,19 @@ interface AdminDevotionalBody {
   imageKeywords?: string;
 }
 
-/** Egy nap teljes rekordja (a „lusta" admin ezzel tölti be a kiválasztott napot). */
+/** Egy nap teljes rekordja (?date=YYYY-MM-DD) (a „lusta" admin ezzel tölti be a kiválasztott napot). */
 export async function GET(request: Request) {
   if (!(await isAdminAuthenticated())) {
     return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
   }
 
-  const day = Number(new URL(request.url).searchParams.get("day"));
-  if (!Number.isInteger(day) || day < 1) {
-    return NextResponse.json({ error: "Érvénytelen day." }, { status: 400 });
+  const date = new URL(request.url).searchParams.get("date");
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   try {
-    const devotional = await getDevotionalByDay(day);
+    const devotional = await getDevotionalByDate(date);
     if (!devotional) {
       return NextResponse.json({ error: "Nem található." }, { status: 404 });
     }
@@ -87,10 +88,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Érvénytelen JSON." }, { status: 400 });
   }
 
-  const { dayNumber, action } = body;
+  const { date, action } = body;
 
-  if (!Number.isFinite(dayNumber) || dayNumber < 1) {
-    return NextResponse.json({ error: "Érvénytelen dayNumber." }, { status: 400 });
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   try {
@@ -104,7 +105,7 @@ export async function PATCH(request: Request) {
           return NextResponse.json({ error: "Hiányzó mezők." }, { status: 400 });
         }
 
-        const existing = await getDevotionalByDay(dayNumber);
+        const existing = await getDevotionalByDate(date);
         if (!existing) {
           return NextResponse.json({ error: "Nem található." }, { status: 404 });
         }
@@ -123,7 +124,7 @@ export async function PATCH(request: Request) {
         const built = buildFullDevotionalFromEditable(merged);
 
         if (action === "save_draft") {
-          devotional = await saveDevotionalDraft(dayNumber, {
+          devotional = await saveDevotionalDraft(date, {
             title: merged.title,
             verse: built.verse,
             content: built.content,
@@ -133,7 +134,7 @@ export async function PATCH(request: Request) {
             category: merged.category,
           });
         } else {
-          devotional = await saveDevotionalAdminEdit(dayNumber, {
+          devotional = await saveDevotionalAdminEdit(date, {
             title: merged.title,
             verse: built.verse,
             content: built.content,
@@ -146,13 +147,13 @@ export async function PATCH(request: Request) {
         break;
       }
       case "approve":
-        devotional = await updateDevotionalStatus(dayNumber, "approved");
+        devotional = await updateDevotionalStatus(date, "approved");
         break;
       case "publish":
-        devotional = await updateDevotionalStatus(dayNumber, "published");
+        devotional = await updateDevotionalStatus(date, "published");
         break;
       case "revert_draft":
-        devotional = await updateDevotionalStatus(dayNumber, "draft");
+        devotional = await updateDevotionalStatus(date, "draft");
         break;
       case "select_pexels_image": {
         const image = body.image;
@@ -169,7 +170,7 @@ export async function PATCH(request: Request) {
             { status: 400 }
           );
         }
-        devotional = await saveDevotionalPexelsImage(dayNumber, {
+        devotional = await saveDevotionalPexelsImage(date, {
           imageUrl: image.imageUrl,
           imageCredit: image.imageCredit,
           imagePhotographerUrl: image.imagePhotographerUrl,
@@ -181,14 +182,14 @@ export async function PATCH(request: Request) {
         if (typeof body.imageKeywords !== "string") {
           return NextResponse.json({ error: "Hiányzó imageKeywords." }, { status: 400 });
         }
-        devotional = await saveDevotionalImageKeywords(dayNumber, body.imageKeywords);
+        devotional = await saveDevotionalImageKeywords(date, body.imageKeywords);
         break;
       }
       case "remove_image":
-        devotional = await clearDevotionalImage(dayNumber);
+        devotional = await clearDevotionalImage(date);
         break;
       case "auto_select_pexels": {
-        const existing = await getDevotionalByDay(dayNumber);
+        const existing = await getDevotionalByDate(date);
         if (!existing) {
           return NextResponse.json({ error: "Nem található." }, { status: 404 });
         }
@@ -210,7 +211,7 @@ export async function PATCH(request: Request) {
         }
 
         devotional = await saveDevotionalPexelsImage(
-          dayNumber,
+          date,
           {
             imageUrl: result.imageUrl,
             imageCredit: result.imageCredit!,

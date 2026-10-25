@@ -4,135 +4,114 @@
 sem másoljuk. Az áhítatok szövege és az admin adatok **privát** Blob store-ban vannak, a feltöltött
 képek **nyilvános** Blob store-ban. A Redis-adatbázist nem töröljük.
 
-Jelölés: **TE** = te végzed a Vercel felületén · **KÓD** = én futtatom, jóváhagyásod után ·
-🛑 megállási pont (jóváhagyás nélkül nem lépünk tovább). A Blob meghajtó csak a
-`STORAGE_DRIVER=blob` beállítással kapcsol be; addig az éles oldal változatlan.
+Jelölés: **TE** = te végzed · **KÓD** = én futtatom, jóváhagyásod után · 🛑 megállási pont ·
+✅ kész · ☐ hátra van. A Blob meghajtó csak a `STORAGE_DRIVER=blob` beállítással kapcsol be;
+addig az éles oldal változatlan.
 
 ---
 
-## 0. Döntések
+## 1. Állapot (2026-10-25)
 
-- ☐ **TE** — **Az utolsó használt napszám.** Az új áhítatok napszáma onnan folytatódjon, ahol a
-  régi abbahagyta (a becslés kb. 149, de nem biztos). Ez azért fontos, mert a korábban megosztott
-  Facebook-linkek `/nap/<szám>` alakúak: ha az új tartalom 1-től indulna, a régi linkek az **új**
-  napok szövegét mutatnák. Folytatólagos számozásnál a régi linkek „már nem érhető el” oldalt adnak.
-  Honnan: a legutóbbi Facebook-poszt `/nap/<szám>` linkje, vagy az utolsó éles oldal napszáma.
-- ☐ **TE** — Tudomásul veszed a Hobby keretet és feltételeket (lásd alább).
-- ☐ **TE** — A használt igehelyek listája (opcionális): ha megvan, soronként egy igehelyet egy
-  szövegfájlba teszel, és a generálás nem ismétli őket. Ha nincs, az első hetekben ismétlődhet ige.
-
-## 1. A két Blob store létrehozása
-
-**Mindkét store Vercelen, a te fiókodban jön létre; a hozzáférési mód és a régió utólag nem
-módosítható** — létrehozás előtt ellenőrizd.
-
-| | Név (javasolt) | Hozzáférés | Mi kerül bele |
-|---|---|---|---|
-| 1. | `ahit-data` | **Private** | áhítatok (piszkozatok is), index, nyilvános pillanatkép, meta, generálási feladatok |
-| 2. | `ahit-images` | **Public** | csak az admin által feltöltött képek (`images/…`) |
-
-**Régió:** ugyanaz mindkettőnél, és lehetőleg ugyanaz, mint a projekt Function régiója (Project →
-Settings → Functions → Function Region; alapértelmezés `iad1`, Washington). Európai olvasóknál a
-`fra1` (Frankfurt) jobb késleltetést ad — ilyenkor a Function régiót is állítsd `fra1`-re.
-
-### Út A — Vercel felület
-
-1. Vercel → **Storage** (a projekt vagy a fiók oldalán) → **Create** → **Blob**.
-2. Add meg a nevet, állítsd a hozzáférést **Private**-ra, válaszd ki a régiót, **Create**.
-3. Ismételd meg a másodikkal: név `ahit-images`, hozzáférés **Public**, ugyanaz a régió.
-4. Kösd a projekthez mindkettőt: az adott store oldalán **Projects** fül → **Connect to Project** →
-   válaszd az **ahit-app** projektet → környezet: **Production** (a Preview-t most ne).
-5. Írd fel mindkét store azonosítóját (store oldalán látható, `store_…` alakú; CLI-ből:
-   `vercel blob list-stores --all`).
-
-### Út B — Vercel CLI (a linkelt projekt mappájában)
-
-```bash
-vercel blob create-store ahit-data   --access private --region fra1 --yes --environment production
-vercel blob create-store ahit-images --access public  --region fra1 --yes --environment production
-vercel blob list-stores
-```
-
-A `--yes` a linkelt projekthez köti, a `--environment production` csak a Productionhöz.
-(Régió megadása nélkül `iad1` az alapértelmezés.)
-
-## 2. Környezeti változók (Vercel → Project → Settings → Environment Variables, csak Production)
-
-A store-ok bekötésekor a Vercel automatikusan beállít néhány változót (`BLOB_STORE_ID`,
-`VERCEL_OIDC_TOKEN` — ez utóbbit a Vercel kezeli, `BLOB_READ_WRITE_TOKEN` is megjelenhet). **Két
-store esetén ezek a nevek csak az egyik store-ra mutathatnak**, ezért az alkalmazás két külön, kifejezett
-változót olvas. Ezeket te adod hozzá:
-
-| Változó | Érték |
+| Elem | Állapot |
 |---|---|
-| `BLOB_DATA_STORE_ID` | az `ahit-data` store azonosítója |
-| `BLOB_IMAGES_STORE_ID` | az `ahit-images` store azonosítója |
-| `ADMIN_PASSWORD` | erős, nem alapértelmezett jelszó (≥12 karakter) |
-| `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`, `GEMINI_API_KEY`, `PEXELS_API_KEY` | a meglévők maradnak |
-| `KV_REST_API_URL`, `KV_REST_API_TOKEN` | **maradnak** (a Redis-visszaúthoz) |
-| `DEVOTIONAL_RETENTION_AUTO_DELETE` | **nincs beállítva** (az automatikus törlést később, külön jóváhagyással kapcsoljuk be) |
-| `STORAGE_DRIVER` | **még NEM állítod be** — ez az átállás utolsó lépése |
+| `ahit-data` store | ✅ **Private**, `iad1`, `store_V387hX4CachqfIao`, a projekt Production környezetéhez kötve |
+| `ahit-images` store | ✅ **Public**, `iad1`, `store_7vD7Lezpgn7HQRFk`, a projekthez kötve (Preview, Production), prefix `BLOB_IMAGES` |
+| Csomag | ✅ Hobby (nincs fizetős szolgáltatás) |
+| Adat store élő próba (valódi Blob) | ✅ 8/8: írás, „már létezik” hiba, `ifMatch`, friss olvasás, `list`, **névtelen elérés tiltott (403)**, törlés |
+| Képtár élő próba | ☐ **nem futtatható helyből** (lásd 2. pont) |
+| `STORAGE_DRIVER` | ✅ **nincs beállítva** (a Redis az aktív tároló) |
+| `DEVOTIONAL_RETENTION_AUTO_DELETE` | ✅ **nincs beállítva** |
+| Napszámozás | ✅ megszűnt: az azonosító a dátum (`/devotional/YYYY-MM-DD`), nincs mit beállítani |
 
-Hitelesítés: az alkalmazás OIDC-vel éri el a store-okat (nincs hosszú életű titok a kódban). Helyi
-futtatáshoz: `vercel env pull .env.local` (a `VERCEL_OIDC_TOKEN` ideiglenes, kb. 12 óra).
+### Production környezeti változók (a Vercel `env ls` szerint, értékek nélkül)
 
-## 3. Ellenőrzés a store-ok létrehozása után (KÓD)
+| Változó | Típus | Megjegyzés |
+|---|---|---|
+| `BLOB_READ_WRITE_TOKEN` | Config, Production | az **adat store** tokenje; az alkalmazás ezt használja az adatokhoz |
+| `BLOB_IMAGES_STORE_ID` | Config, Preview+Production | a képtár azonosítója |
+| `BLOB_IMAGES_READ_WRITE_TOKEN` | Secret, Preview+Production | a képtár tokenje (nem olvasható vissza) |
+| `BLOB_IMAGES_WEBHOOK_PUBLIC_KEY` | Config | a Vercel hozza létre, az app nem használja |
+| `ADMIN_PASSWORD`, `CRON_SECRET`, `NEXT_PUBLIC_SITE_URL`, `GEMINI_API_KEY`, `PEXELS_API_KEY` | Secret | megvannak |
+| `KV_REST_API_*`, `KV_URL`, `REDIS_URL` | Secret | maradnak (a Redis-visszaút) |
+| `STORAGE_DRIVER` | – | **még nincs** (ez az átállás utolsó lépése) |
 
-- ☐ **KÓD** — Konfiguráció-ellenőrzés (nem csinál hálózati hívást, nem ír):
-  ```bash
-  npx tsx scripts/blob-preflight.ts --env-file=.env.local
-  ```
-- ☐ **KÓD** — Élő próba a két store-on (csak a `_preflight/` útvonalon, ~8 összetett és ~4 egyszerű művelet;
-  utána törli a próbafájlokat):
-  ```bash
-  npx tsx scripts/blob-preflight.ts --env-file=.env.local --probe
-  ```
-  Ez azt ellenőrzi, amit emulátorral nem lehetett: az `ifMatch`-ütközést, a „már létezik” hibaszöveget,
-  a friss olvasást, a `list`-et, hogy az **adat store névtelenül nem érhető el**, és hogy a **képtár képe nyilvános**.
-  🛑 Minden sor OK legyen. **HIBA esetén megállunk** (pl. ha az adat store véletlenül Public lett: törölni és
-  újra Private-ként létrehozni kell).
+Az alkalmazás pontosan ezeket a neveket olvassa (`BLOB_READ_WRITE_TOKEN` az adathoz,
+`BLOB_IMAGES_STORE_ID` + `BLOB_IMAGES_READ_WRITE_TOKEN` a képekhez), további változó nem kell.
+A konfiguráció-ellenőrző a Production változónevekre nem jelez hibát.
 
-## 4. Tiszta lap beállítása (KÓD)
+## 2. Ismert hiány: a képtár élő próbája
 
+A helyi `vercel` CLI mindig **development** OIDC-tokent ad, a Blob API pedig ezt nem fogadja el
+(*„OIDC is enabled for this project, but not for the development environment”*), a képtár tokenje
+pedig Secret, így nem húzható le helyre. Ezért a képtár **élő** próbája (feltöltés → névtelen letöltés
+→ törlés) csak a Production futásban végezhető el. Lehetőségek:
+
+- **A) (ajánlott, nincs extra beállítás):** az átállás utáni első lépésként az adminban feltöltesz egy
+  tesztképet egy tesztnapra (lásd az 5. pont). A képfeltöltés hibája **nem érinti** a szövegeket,
+  a közzétételt vagy a generálást; ha a képtár nem működik, a Pexels-képek változatlanul mennek,
+  és a visszaút (a `STORAGE_DRIVER` törlése) bármikor megvan.
+- **B)** A projekt Settings → Security → OIDC beállításánál a development környezetet is engedélyezed,
+  és a képtár bekötését kiterjeszted a Developmentre; akkor helyből is lefut a próba.
+
+## 3. Előkészített átállás (semmit nem kapcsol be)
+
+### 3.1 Tiszta lap (B forgatókönyv)
+
+- ✔ Napszám nincs: a Blob üresen indul, a generálás nem igényel korábbi napot. A régi `/nap/<szám>`
+  linkek **soha nem** nyitnak meg áhítatot, mindig tájékoztató oldalt kapnak a mai áhítat gombjával.
+- ☐ **TE** (opcionális) — A már használt igehelyek listája soronként egy szövegfájlban.
 - ☐ **KÓD** — Száraz próba, majd éles (jóváhagyásod után):
   ```bash
-  npx tsx scripts/redis-to-blob.ts --seed-meta --max-day=<utolsó napszám> --used-verses-file=igek.txt --env-file=.env.local
-  npx tsx scripts/redis-to-blob.ts --seed-meta --max-day=<utolsó napszám> --used-verses-file=igek.txt --confirm=SEED-<utolsó napszám> --env-file=.env.local
+  npx tsx scripts/redis-to-blob.ts --seed-meta [--used-verses-file=igek.txt] --env-file=.env.blob.local
+  npx tsx scripts/redis-to-blob.ts --seed-meta [--used-verses-file=igek.txt] --confirm=SEED --env-file=.env.blob.local
   ```
-  (A `--used-verses-file` elhagyható.) A következő generált nap napszáma `<utolsó napszám>+1` lesz.
+  (A `.env.blob.local` helyi, gitignore-olt fájl az adat store tokenjével; a seed csak az adat store metáját írja.)
 
-## 5. Átállás (a Production átkapcsolása)
+### 3.2 Az átállás (a Production átkapcsolása)
 
-- ☐ **TE** — Időpont: nem generálás közben. A napi generálás cronja `00:05 UTC`-re van ütemezve, de a
-  Vercel Hobby cron **±59 percet** késhet; az újrapróbákat külső ütemező hívja (01:05–03:05 Bucharest).
-- ☐ **TE** — Production: `STORAGE_DRIVER=blob`, majd **redeploy** (a környezeti változó csak új deployjal lép életbe).
-- ☐ **TE/KÓD** — Azonnali ellenőrzés:
-  - ☐ Admin belépés; nincs tárolóhiba-üzenet; a lista üres, „Új áhítat készítése” látszik
-  - ☐ „Új áhítat készítése” (Gemini) → a mai nap megjelenik; szerkesztés, mentés, közzététel
-  - ☐ Főoldal: a közzétett mai áhítat és a nyolcnapos választó; a közzététel után azonnal frissül
-  - ☐ Kép feltöltése, cseréje, eltávolítása működik; a régi kép eltűnik a képtárból
-  - ☐ Facebook: a `/nap/<n>` link és az előnézet (cím, leírás, kép) megjelenik
-  - ☐ `GET /api/cron/prune-devotionals` (Bearer `CRON_SECRET`): **csak előnézetet ad**, nem töröl
-- ☐ **TE** — Másnap: a napi cron legenerálta a mai áhítatot? **A Hobby runtime naplók csak 1 óráig
-  maradnak meg**, ezért ne a naplóból, hanem az admin „Diagnosztika” panelén a „Mai automatikus
-  generálás” állapotból ellenőrizd (vagy a cron időpontja után egy órán belül a Vercel naplóból).
-  Elakadás esetén az admin „Mai áhítat generálása most” gombja.
-- ☐ **TE** — Egy hétig: Vercel → Storage → Blob → **Observability**: az egyszerű és összetett műveletek
-  száma (becslés: lásd a Hobby fejezetet).
+- ☐ **TE** — Időpont: nem generálás közben. A napi generálás cronja 00:05 UTC, de a Hobby cron
+  **±59 percet** késhet; az újrapróbákat külső ütemező hívja.
+- ☐ **KÓD/TE** — Átkapcsolás (jóváhagyásod után):
+  ```bash
+  vercel env add STORAGE_DRIVER production --value blob --yes
+  vercel deploy --prod          # vagy: üres commit + push, vagy a Vercel felületén Redeploy
+  ```
+  A környezeti változó csak új deployjal lép életbe.
+- ☐ **KÓD** — Azonnali ellenőrzés az éles oldalon (csak olvasó):
+  ```bash
+  npx tsx scripts/post-cutover-check.ts https://ahit-app.vercel.app
+  ```
+  Ellenőrzi: főoldal 200 és nincs hibaoldal, `/api/devotionals` 200 (nincs tárolóhiba), csak közzétett
+  napok, a cron és az admin végpontok hitelesítés nélkül 401, a régi nap érthető oldalt ad.
 
-## 6. Visszaút
+## 4. Visszaút
 
-1. Production: `STORAGE_DRIVER` törlése (vagy `redis`), redeploy. A Redis-adat és -kód érintetlen;
-   a visszaút csak akkor ad tartalmat, ha az Upstash újra válaszol.
+1. `vercel env rm STORAGE_DRIVER production --yes` (vagy `redis` értékre állítás), majd újabb deploy.
+   A Redis-adat és -kód érintetlen; a visszaút csak akkor ad tartalmat, ha az Upstash újra válaszol.
 2. A Blob store-okat és a bennük lévő adatot **ne töröld**, amíg a hibát nem értettük meg.
 
-## 7. Automatikus törlés bekapcsolása (csak külön jóváhagyással)
+## 5. Átállás utáni kézi ellenőrzés (TE, az adminban)
 
-- ☐ **KÓD** — Előnézet: `npx tsx scripts/blob-retention.ts --env-file=.env.local`
+- ☐ Belépés; nincs tárolóhiba-üzenet; a lista üres, „Új áhítat készítése” látszik
+- ☐ „Új áhítat készítése” (Gemini) → a mai nap megjelenik; szerkesztés, mentés, közzététel
+- ☐ Főoldal: a közzétett áhítat és a nyolcnapos választó; a közzététel után azonnal frissül
+- ☐ **Képtár-teszt:** egy (akár piszkozat) napnál kép feltöltése, cseréje, eltávolítása; a feltöltött
+  kép URL-je `…public.blob.vercel-storage.com/images/…`, böngészőből megnyitható; a csere/eltávolítás
+  után a régi kép 404-et ad (legfeljebb ~60 mp késéssel)
+- ☐ Facebook: a `/devotional/<dátum>` link és az előnézet (cím, leírás, kép)
+- ☐ `GET /api/cron/prune-devotionals` Bearer `CRON_SECRET`-tel: **csak előnézetet ad**
+- ☐ Másnap: a napi cron legenerálta-e a mai áhítatot? **A Hobby runtime naplók csak 1 óráig maradnak
+  meg**, ezért az admin „Diagnosztika” → „Mai automatikus generálás” állapotát nézd (vagy a cron
+  időpontja után egy órán belül a Vercel naplót). Elakadásnál: „Mai áhítat generálása most”.
+- ☐ Egy hétig: Vercel → Storage → Blob → **Observability** (becslés: ~700 összetett és ~3 000 egyszerű/hó)
+
+## 6. Automatikus törlés bekapcsolása (csak külön jóváhagyással)
+
+- ☐ **KÓD** — Előnézet: `npx tsx scripts/blob-retention.ts --env-file=.env.blob.local`
 - ☐ **TE** — Átnézed a törlendő dátumokat és képeket, jóváhagyod.
-- ☐ **KÓD** — Első törlés mentéssel: `npx tsx scripts/blob-retention.ts --apply --confirm=DELETE-<n> --env-file=.env.local`
-- ☐ **TE** — Csak ezután: `DEVOTIONAL_RETENTION_AUTO_DELETE=true` a Productionben (a napi cron 03:00 UTC körül fut).
-- ☐ **KÓD** — A Redis-kód és a `KV_*` változók kivezetése: csak hosszabb, hibátlan működés és a te jóváhagyásod után.
+- ☐ **KÓD** — Első törlés mentéssel: `npx tsx scripts/blob-retention.ts --apply --confirm=DELETE-<n> --env-file=.env.blob.local`
+- ☐ **TE/KÓD** — Csak ezután: `DEVOTIONAL_RETENTION_AUTO_DELETE=true` a Productionben (napi cron ~03:00 UTC).
+- ☐ A Redis-kód és a `KV_*` változók kivezetése: csak hosszabb, hibátlan működés és a te jóváhagyásod után.
 
 ---
 
@@ -152,23 +131,18 @@ futtatáshoz: `vercel env pull .env.local` (a `VERCEL_OIDC_TOKEN` ideiglenes, kb
 | Retry-hívás / napi retention | 1 / 3 | 0 / 2 |
 | **Havi összeg** (30 generálás, 3 újrapróba-nap, 20 admin-nap, óránkénti nyilvános frissítés) | **~2 950 (30%)** | **~690 (34%)** |
 
-A nyilvános pillanatkép ~38 KB, a becsült havi forgalom ~40 MB a 10 GB-ból. A számlálás konzervatív
-(minden olvasás egyszerű műveletnek számít, a CDN-találatok a valóságban nem).
+A nyilvános pillanatkép ~38 KB, a becsült havi forgalom ~40 MB a 10 GB-ból.
 
-**Egyéb Hobby tényezők:**
-- A cron napi egyszeri futású lehet (nálunk mindkettő az), pontossága ±59 perc; projektenként 100 cron engedélyezett.
-- Függvény maximális futásideje 300 s (a generálás `maxDuration`-je ennyi).
-- Runtime naplók megőrzése: **1 óra**.
-- Képoptimalizálás: 5 000 átalakítás/hó (a mostani forgalomhoz bőven elég).
-- A Hobby csomag **nem kereskedelmi, személyes használatra** szól (Vercel Fair Use).
+**Egyéb Hobby tényezők:** a cron napi egyszeri futású lehet, pontossága ±59 perc, projektenként 100
+engedélyezett · a függvény maximális futásideje 300 s · runtime naplók: **1 óra** · képoptimalizálás:
+5 000 átalakítás/hó · a Hobby **nem kereskedelmi, személyes használatra** szól.
 
-**Emulátorral és tesztekkel ellenőrizve (80+ teszt):** az írás sorrendje, az egyidejű írások, a pillanatkép és
-az index kezelése, a retention minden ága, a képek életciklusa, a konfiguráció-ellenőrzés.
+**Emulátorral és tesztekkel ellenőrizve (80 teszt):** az írás sorrendje, az egyidejű írások, a
+pillanatkép és az index kezelése, a retention minden ága, a képek életciklusa, a konfiguráció-ellenőrzés.
+**Valódi Blobbal ellenőrizve (adat store):** `ifMatch`, „már létezik” hiba, friss olvasás, `list`,
+privát hozzáférés, törlés. **Még nem ellenőrzött valódi Blobbal:** a képtár nyilvános elérése és
+feltöltése, a CDN-gyorsítótár késése felülíráskor (legfeljebb 60 mp).
 
-**Csak a valódi Blobbal ellenőrizhető (ezt fedi a `--probe`):** az `ifMatch` és a „már létezik”
-hibaszöveg pontos viselkedése, a CDN-gyorsítótár késése (legfeljebb 60 mp felülíráskor), az OIDC hitelesítés
-két store mellett, a privát/nyilvános hozzáférés.
-
-**Ismert korlátok:** a piszkozatokhoz feltöltött képek a nyilvános képtárban vannak (kitalálhatatlan, véletlen
-utótagú URL-lel, de technikailag nyilvánosak). A több objektumot érintő írások nem atomiak; a `rebuild()`
-helyreállítja az indexet és a pillanatképet a rekordokból.
+**Ismert korlátok:** a piszkozatokhoz feltöltött képek a nyilvános képtárban vannak (kitalálhatatlan,
+véletlen utótagú URL-lel, de technikailag nyilvánosak). A több objektumot érintő írások nem atomiak;
+a `rebuild()` helyreállítja az indexet és a pillanatképet a rekordokból.

@@ -96,7 +96,6 @@ function finalizePlanned(
   meta: Record<string, unknown>
 ): DynamicPlannedDay {
   plannerLog("assemble_success", {
-    dayNumber: planned.dayNumber,
     title: planned.title,
     contentChars: planned.content.length,
     ...meta,
@@ -110,7 +109,7 @@ async function fetchMetadata(
   options?: { rejectedReferencesThisRun?: string[] }
 ): Promise<DevotionalMetadata> {
   plannerLog("metadata_start", {
-    dayNumber: memory.nextDayNumber,
+    date: memory.targetDate,
     duplicateRejections: options?.rejectedReferencesThisRun?.length ?? 0,
   });
   let lastMetadataError: unknown;
@@ -190,7 +189,7 @@ async function fetchMetadata(
           {
             attempt,
             maxAttempts: METADATA_MAX_ATTEMPTS,
-            dayNumber: memory.nextDayNumber,
+            date: memory.targetDate,
             error: describeErrorForLog(error),
           },
           null,
@@ -217,7 +216,7 @@ async function fetchMetadata(
     "[metadata-generation:debug] metadata fallback disabled after failures",
     JSON.stringify(
       {
-        dayNumber: memory.nextDayNumber,
+        date: memory.targetDate,
         fallbackUsed: false,
         lastMetadataError: describeErrorForLog(lastMetadataError),
         note:
@@ -250,7 +249,7 @@ async function fetchDevotionalMarkdown(
 }> {
   plannerLog("body_start", {
     sourceFunction: BODY_SOURCE_FUNCTION,
-    dayNumber: memory.nextDayNumber,
+    date: memory.targetDate,
     title: metadata.title,
     maxOutputTokens: GEMINI_BODY_MAX_OUTPUT_TOKENS,
   });
@@ -455,7 +454,7 @@ export async function planAndGenerateNextDay(
   memory: DevotionalMemory
 ): Promise<DynamicPlannedDay> {
   plannerLog("start", {
-    dayNumber: memory.nextDayNumber,
+    date: memory.targetDate,
     strategy: "two_step",
     bodyGenerator: BODY_SOURCE_FUNCTION,
     duplicateVerseMaxAttempts: DUPLICATE_VERSE_MAX_ATTEMPTS,
@@ -533,8 +532,7 @@ export async function planAndGenerateNextDay(
           excerpt: metadata.excerpt,
           devotionalMarkdown,
           imageKeywords: metadata.imageKeywords,
-        },
-        memory.nextDayNumber
+        }
       );
 
       const verseRef = extractVerseReference(planned.verse);

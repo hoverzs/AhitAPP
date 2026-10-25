@@ -7,15 +7,14 @@ import { MemoryBlobClient } from "../src/lib/storage/blob/memory-client";
 import type { Devotional } from "../src/lib/types";
 
 function devotional(
-  dayNumber: number,
+  n: number,
   date: string,
   overrides: Partial<Devotional> = {}
 ): Devotional {
   return {
-    dayNumber,
     date,
-    title: `Cím ${dayNumber}`,
-    verse: `Róma ${dayNumber}:1 — teszt vers`,
+    title: `Cím ${n}`,
+    verse: `Róma ${n}:1 — teszt vers`,
     content: `## Tartalom\n\nSzöveg ${date} `.repeat(40),
     imageUrl: "",
     createdAt: `${date}T08:00:00.000Z`,
@@ -55,31 +54,31 @@ test("listAdminEntries: könnyű sorok a rekordok olvasása nélkül", async () 
   // Egyetlen olvasás (index), rekordolvasás nélkül.
   assert.equal(client.ops.simple, 1);
   assert.equal(client.ops.advanced, 0);
-  assert.deepEqual(entries.map((e) => e.dayNumber), [3, 2]);
+  assert.deepEqual(entries.map((e) => e.title), ["Cím 3", "Cím 2"]);
   assert.equal(entries[1].editedByAdmin, true);
   assert.equal(entries[1].verse, "Róma 2:1 — teszt vers");
   assert.equal(entries[1].lastApiError?.length, 200); // az index nem hizlalható
   assert.equal(JSON.stringify(entries).includes("Szöveg"), false); // nincs tartalom
 });
 
-test("listAdminEntries: a legnagyobb napszámú, régi rekord is bekerül", async () => {
+test("listAdminEntries: a határ előtti (régi) rekord nem kerül a listába", async () => {
   const { storage } = setup();
   await storage.saveDevotional(devotional(7, "2026-08-01"));
   const entries = await storage.listAdminEntries("2026-10-17");
-  assert.deepEqual(entries.map((e) => e.dayNumber), [7]);
+  assert.deepEqual(entries, []);
 });
 
-test("getDevotionalByDayNumber: index + egyetlen rekord, a teljes készlet olvasása nélkül", async () => {
+test("getDevotionalByDate: egyetlen rekord, a teljes készlet olvasása nélkül", async () => {
   const { client, storage } = setup();
   for (let day = 1; day <= 6; day++) {
     await storage.saveDevotional(devotional(day, `2026-10-${String(day + 10)}`));
   }
 
   client.resetOps();
-  const found = await storage.getDevotionalByDayNumber(4);
-  assert.equal(found?.dayNumber, 4);
-  assert.equal(client.ops.simple, 2); // index + 1 rekord, nem 6+1
-  assert.equal(await storage.getDevotionalByDayNumber(99), undefined);
+  const found = await storage.getDevotionalByDate("2026-10-14");
+  assert.equal(found?.title, "Cím 4");
+  assert.equal(client.ops.simple, 1); // egyetlen rekord, nem 6+1
+  assert.equal(await storage.getDevotionalByDate("2026-12-31"), undefined);
 });
 
 test("onChange minden sikeres írás után lefut, olvasás után nem", async () => {
@@ -113,7 +112,6 @@ test("sikertelen írásnál az onChange nem fut le", async () => {
 test("index-sor → admin listasor és csonk rekord", () => {
   const entry = {
     date: "2026-10-24",
-    dayNumber: 5,
     status: "needs_review" as const,
     title: "Cím",
     verse: "Zsolt 23:1 — ...",
@@ -125,7 +123,6 @@ test("index-sor → admin listasor és csonk rekord", () => {
   };
 
   assert.deepEqual(entryToListItem(entry), {
-    dayNumber: 5,
     date: "2026-10-24",
     title: "Cím",
     verse: "Zsolt 23:1 — ...",
@@ -144,7 +141,7 @@ test("index-sor → admin listasor és csonk rekord", () => {
 });
 
 test("régi, bővítés előtti index-sor is kezelhető", () => {
-  const legacy = { date: "2026-10-24", dayNumber: 1, status: "published" as const, title: "T" };
+  const legacy = { date: "2026-10-24", status: "published" as const, title: "T" };
   assert.equal(entryToListItem(legacy).verse, "");
   assert.match(entryToStub(legacy).createdAt, /^2026-10-24T/);
 });

@@ -14,7 +14,8 @@ Minimalista Next.js alkalmazás napi keresztény áhítatok kezelésére és meg
 | Útvonal | Leírás |
 |---------|--------|
 | `/` | Archívum — összes nap listája |
-| `/nap/[id]` | Nyilvános áhítat oldal (nap száma) |
+| `/devotional/[date]` | Nyilvános áhítat oldal (`YYYY-MM-DD`; csak a mai nap + az elmúlt 7 nap) |
+| `/nap/[id]` | Régi, napszámos hivatkozás: tájékoztató oldal a mai áhítatra mutató gombbal (tartalmat nem mutat) |
 | `/admin` | Jelszóval védett generátor panel |
 | `GET /api/cron/generate-daily` | Napi automatikus generálás (Vercel Cron) |
 
@@ -70,7 +71,7 @@ A napi generálás **nem** statikus 30 napos fájlt követ — a teljes `data/de
 - kiválasztja a következő sorszámú napot (`max + 1`),
 - **soha nem ismétel** korábbi verset/címet,
 - fenntartja a heti/témakör logikát (Békesség → Reménység stb.),
-- egy hívásban generálja: `dayNumber`, `title`, `verse`, `content`, `category`, kép prompt.
+- egy hívásban generálja: `title`, `verse`, `content`, `category`, kép prompt.
 
 Cron: `GET/POST /api/cron/generate-daily` + `CRON_SECRET`.
 

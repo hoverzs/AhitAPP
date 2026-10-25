@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isValidIsoDate } from "@/lib/app-date";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { buildAdminDevotionalContext } from "@/lib/app-data";
 import { readDevotionals } from "@/lib/devotionals";
@@ -12,7 +13,7 @@ import { storageErrorResponse } from "@/lib/storage";
 export const dynamic = "force-dynamic";
 
 interface RefineApplyBody {
-  dayNumber?: number;
+  date?: string;
   instruction?: string;
   refined?: DevotionalRefinementResult;
   statusAfter?: RefinementStatusAfter;
@@ -44,12 +45,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Érvénytelen JSON." }, { status: 400 });
   }
 
-  const dayNumber = body.dayNumber;
+  const date = body.date;
   const instruction = body.instruction?.trim();
   const statusAfter = body.statusAfter ?? "needs_review";
 
-  if (!Number.isFinite(dayNumber) || (dayNumber ?? 0) < 1) {
-    return NextResponse.json({ error: "Érvénytelen dayNumber." }, { status: 400 });
+  if (!isValidIsoDate(date)) {
+    return NextResponse.json({ error: "Érvénytelen dátum." }, { status: 400 });
   }
 
   if (!instruction) {
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const devotional = await applyDevotionalRefinement(dayNumber!, body.refined, {
+    const devotional = await applyDevotionalRefinement(date, body.refined, {
       instruction,
       statusAfter,
       updateImageKeywords: body.updateImageKeywords === true,
