@@ -4,6 +4,7 @@ import { DevotionalShareButtons } from "@/components/devotional/DevotionalShareB
 import { DevotionalUnavailable } from "@/components/devotional/DevotionalUnavailable";
 import { resolveDevotionalView } from "@/lib/devotional-view";
 import { getPublicDevotionalUrl } from "@/lib/facebook";
+import { getSiteUrl } from "@/lib/site-url";
 import { resolveDevotionalDisplayImage } from "@/lib/image-assets";
 import type { Metadata } from "next";
 
@@ -34,13 +35,27 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const devotional = result.devotional;
   const displayImage = resolveDevotionalDisplayImage(devotional.imageUrl);
 
+  // A relatív (tartalék) kép is abszolút URL-lel kerül az og:image-be.
+  const imageUrl = displayImage.src
+    ? new URL(displayImage.src, getSiteUrl()).toString()
+    : undefined;
+
   return {
     title: devotional.title,
     description: devotional.verse,
+    alternates: { canonical: getPublicDevotionalUrl(devotional.date) },
     openGraph: {
       title: devotional.title,
       description: devotional.verse,
-      ...(displayImage.src ? { images: [{ url: displayImage.src }] } : {}),
+      url: getPublicDevotionalUrl(devotional.date),
+      type: "article",
+      ...(imageUrl ? { images: [{ url: imageUrl }] } : {}),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: devotional.title,
+      description: devotional.verse,
+      ...(imageUrl ? { images: [imageUrl] } : {}),
     },
   };
 }
