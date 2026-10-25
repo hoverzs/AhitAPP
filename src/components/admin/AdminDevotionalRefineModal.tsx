@@ -19,6 +19,8 @@ interface AdminDevotionalRefineModalProps {
   devotional: Devotional;
   onClose: () => void;
   onApplied: (devotional: Devotional) => void;
+  /** Heti műhely: a mentés után a státusz mindig „ellenőrzésre vár” — a státuszválasztó rejtve. */
+  reviewOnly?: boolean;
 }
 
 type Phase = "form" | "preview";
@@ -34,6 +36,7 @@ export function AdminDevotionalRefineModal({
   devotional,
   onClose,
   onApplied,
+  reviewOnly = false,
 }: AdminDevotionalRefineModalProps) {
   const [phase, setPhase] = useState<Phase>("form");
   const [instruction, setInstruction] = useState("");
@@ -279,6 +282,7 @@ export function AdminDevotionalRefineModal({
                 )}
               </div>
 
+              {!reviewOnly && (
               <div className="rounded-xl border border-ivory-200/80 bg-ivory-50/50 p-4">
                 <p className="text-sm font-medium text-ink mb-3">Mentés utáni státusz</p>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -314,6 +318,7 @@ export function AdminDevotionalRefineModal({
                   </label>
                 </div>
               </div>
+              )}
             </>
           )}
         </div>

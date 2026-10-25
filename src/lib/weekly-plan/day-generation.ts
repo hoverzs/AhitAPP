@@ -22,13 +22,33 @@ import {
 } from "./errors";
 import { buildDayExtraContext } from "./prompts";
 import { assertWeekEditable } from "./service";
+import { GENERATING_STALE_MS } from "./ui-logic";
 import { getWeeklyPlanStore, type WeeklyPlanStore } from "./store";
 import type { WeeklyPlan, WeeklyPlanDay } from "./types";
 
-/** Egy „generating” állapot ennyi ideig számít élőnek (a futás max. 5 perc); utána elakadtnak vesszük. */
-export const GENERATING_STALE_MS = 10 * 60 * 1000;
+export { GENERATING_STALE_MS };
 
 const ERROR_MAX_CHARS = 300;
+
+/**
+ * A napi hiba felhasználói szövege. Ha a hiba kódja ismeretlen, a technikai
+ * üzenet első része is látszik (kulcsszerű részek kitakarva), hogy az admin
+ * ne egy tartalmatlan „ismeretlen hiba” szöveget lásson.
+ */
+export function describeDayFailure(error: unknown): string {
+  if (error instanceof DayIncompleteError) return error.message.slice(0, ERROR_MAX_CHARS);
+  const details = toGeminiErrorDetails(error);
+  let message = details.message;
+  if (details.code === "UNKNOWN" && error instanceof Error && error.message.trim()) {
+    const technical = error.message
+      .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[kulcs]")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 160);
+    if (technical && !message.includes(technical)) message = `${message} (${technical})`;
+  }
+  return message.slice(0, ERROR_MAX_CHARS);
+}
 
 function storeOf(store?: WeeklyPlanStore): WeeklyPlanStore {
   return store ?? getWeeklyPlanStore();
@@ -126,7 +146,8 @@ export async function generateWeekDay(
   }
 
   // Egy korábbi, félbeszakadt futásból már megvan a teljes szöveg: nem hívjuk újra a Geminit.
-  if (existing && !force && isCompleteRecord(existing)) {
+  // (Elavult nap — a terv megváltozott a szöveg óta — nem egyeztethető: újra kell generálni.)
+  if (existing && !force && day.state !== "stale" && isCompleteRecord(existing)) {
     const updated = await setDayState(s, params.weekId, day.date, (d) => ({
       ...d,
       state: "ready",
@@ -181,9 +202,7 @@ export async function generateWeekDay(
     }));
     return { plan: updated, devotional: saved, reconciled: false, regenerated: regenerate };
   } catch (error) {
-    const message = (
-      error instanceof DayIncompleteError ? error.message : toGeminiErrorDetails(error).message
-    ).slice(0, ERROR_MAX_CHARS);
+    const message = describeDayFailure(error);
     try {
       await setDayState(s, params.weekId, day.date, (d) => ({
         ...d,
@@ -239,7 +258,10 @@ export async function setWeekDevotionalApproval(
     if (!record) skip("Még nincs elkészült szöveg.");
     else if (record.weekId !== params.weekId) skip("Az áhítat nem ebből a tervből származik.");
     else if (params.approve) {
-      if (!isCompleteRecord(record)) skip("A szöveg hiányos — javítsd vagy generáld újra.");
+      const dayState = plan.days.find((d) => d.date === date)!.state;
+      if (dayState === "stale") skip("A terv ezen napja a szöveg óta megváltozott — generáld újra.");
+      else if (dayState !== "ready") skip("A nap szövege nem végleges — várd meg a generálást, vagy generáld újra.");
+      else if (!isCompleteRecord(record)) skip("A szöveg hiányos — javítsd vagy generáld újra.");
       else if (record.status === "approved" || record.status === "published") skip("Már jóváhagyott.");
       else {
         await updateDevotionalStatus(date, "approved");

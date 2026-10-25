@@ -25,6 +25,7 @@ import {
   WeeklyPlanUnsupportedError,
   WeeklyPlanValidationError,
 } from "./store";
+import type { DaySummary } from "./ui-logic";
 import { getNextWeekStart, getWeekDates, getWeekStart, WEEK_LENGTH } from "./types";
 
 export const MAX_BODY_CHARS = 100_000;
@@ -109,19 +110,6 @@ export function requireWeekId(body: Record<string, unknown>): string {
   if (!isValidIsoDate(weekId)) throw new WeeklyPlanInputError("A week mező érvénytelen dátum.");
   assertWeekEditable(weekId);
   return weekId;
-}
-
-export interface DaySummary {
-  date: string;
-  weekday: string;
-  devotional: null | {
-    status: string;
-    title: string;
-    weekId?: string;
-    lastApiError?: string;
-    updatedAt?: string;
-    imageUrl?: string;
-  };
 }
 
 /** A hét napjainak áhítat-rekordjai könnyű formában (egyetlen index-olvasás Blobon). */

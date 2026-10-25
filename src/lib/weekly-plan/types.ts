@@ -13,7 +13,11 @@ export const WEEKLY_PLAN_VERSION = 1;
 export type WeeklyPlanStatus = "draft" | "approved";
 /** Honnan származik a terv: Gemini javaslat, beillesztett brief vagy kézi. */
 export type WeeklyPlanSource = "gemini" | "brief" | "manual";
-export type WeeklyPlanDayState = "planned" | "generating" | "ready" | "failed";
+/**
+ * planned: még nincs szöveg · generating: készül · ready: kész · failed: sikertelen ·
+ * stale: van szöveg, de a terv ezen napja azóta megváltozott (újragenerálni kell).
+ */
+export type WeeklyPlanDayState = "planned" | "generating" | "ready" | "failed" | "stale";
 
 export const WEEKLY_PLAN_STATUSES: WeeklyPlanStatus[] = ["draft", "approved"];
 export const WEEKLY_PLAN_SOURCES: WeeklyPlanSource[] = ["gemini", "brief", "manual"];
@@ -22,6 +26,7 @@ export const WEEKLY_PLAN_DAY_STATES: WeeklyPlanDayState[] = [
   "generating",
   "ready",
   "failed",
+  "stale",
 ];
 
 export interface WeeklyPlanDay {

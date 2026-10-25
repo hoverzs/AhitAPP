@@ -55,6 +55,9 @@ export function AdminHeader({
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Link href="/admin/het" className="admin-btn admin-btn-edit admin-btn-sm">
+            Heti műhely
+          </Link>
           <AdminButton variant="ghost" size="sm" onClick={onLogout}>
             Kijelentkezés
           </AdminButton>

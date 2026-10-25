@@ -198,7 +198,7 @@ test("a felülbírálás a terven belüli ismétlést nem oldja fel", async () =
 
 // ── finomítás természetes nyelven ───────────────────────────────────────────
 
-test("finomítás: a jelenlegi tervből indul, az érintetlen napok változatlanok, az érintettek újra 'planned'", async () => {
+test("finomítás: a jelenlegi tervből indul, az érintetlen napok változatlanok, az érintett, már kész nap 'stale' (elavult)", async () => {
   gemini.planReplies.push({ text: planJson() });
   const first = await proposePlan({ weekId: NEXT_WEEK, theme: "Téma" });
 
@@ -227,7 +227,7 @@ test("finomítás: a jelenlegi tervből indul, az érintetlen napok változatlan
   assert.match(prompt, /A csütörtök legyen a bölcsességről/);
 
   assert.equal(result.plan.days[3].title, "Új csütörtöki cím");
-  assert.equal(result.plan.days[3].state, "planned");
+  assert.equal(result.plan.days[3].state, "stale");
   assert.deepEqual(result.staleDates, [thursday]);
   assert.equal(result.plan.days[0].title, first.plan.days[0].title, "érintetlen nap változatlan");
   assert.equal(result.plan.createdAt, first.plan.createdAt);

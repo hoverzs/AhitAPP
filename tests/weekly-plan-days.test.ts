@@ -273,3 +273,66 @@ test("jóváhagyás: csak az elkészült, teljes szöveg hagyható jóvá; a jö
   assert.equal((await getPublicWindowDevotionals()).length, 0);
   void monday;
 });
+
+test("elavult nap: a terv módosítása után a régi szöveg nem hagyható jóvá és nem 'egyeztethető', csak újragenerálható", async () => {
+  const { patchPlan, reopenPlan } = await import("../src/lib/weekly-plan/service");
+  await approvedPlan(THIS_WEEK);
+  const date = TODAY;
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  const first = await generateWeekDay({ weekId: THIS_WEEK, date });
+
+  // Szerkesztő módosítja a nap tervét: a megmaradt szöveg elavul.
+  const live = (await getWeeklyPlanStore().getPlan(THIS_WEEK))!;
+  const reopened = await reopenPlan({ weekId: THIS_WEEK, expectedUpdatedAt: live.updatedAt });
+  const patched = await patchPlan({
+    weekId: THIS_WEEK,
+    expectedUpdatedAt: reopened.plan.updatedAt,
+    patch: { days: [{ date, title: "Új cím a módosított tervből" }] },
+  });
+  assert.deepEqual(patched.staleDates, [date]);
+  assert.equal((await dayState(THIS_WEEK, date)).state, "stale");
+  await approvePlan({ weekId: THIS_WEEK, expectedUpdatedAt: patched.plan.updatedAt });
+
+  const outcome = await setWeekDevotionalApproval({ weekId: THIS_WEEK, approve: true, dates: [date] });
+  assert.deepEqual(outcome.changed, []);
+  assert.match(outcome.skipped[0].reason, /megváltozott/);
+
+  // Normál generálás nem egyeztet a régi szöveggel, hanem újragenerál (verziót ment).
+  const callsBefore = gemini.bodyCalls().length;
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  const regenerated = await generateWeekDay({ weekId: THIS_WEEK, date });
+  assert.equal(regenerated.reconciled, false);
+  assert.equal(gemini.bodyCalls().length, callsBefore + 1);
+  assert.equal(regenerated.devotional.title, "Új cím a módosított tervből");
+  assert.equal(regenerated.devotional.versionHistory?.length, 1);
+  assert.equal(first.devotional.title, "Cím " + (days(THIS_WEEK).indexOf(date) + 1));
+
+  const approved = await setWeekDevotionalApproval({ weekId: THIS_WEEK, approve: true, dates: [date] });
+  assert.deepEqual(approved.changed, [date]);
+});
+
+test("nem végleges (generating / failed / planned) nap szövege nem hagyható jóvá", async () => {
+  await approvedPlan(THIS_WEEK);
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  await generateWeekDay({ weekId: THIS_WEEK, date: TODAY });
+  await getWeeklyPlanStore().updatePlan(THIS_WEEK, (p) => ({
+    ...p,
+    days: p.days.map((d) => (d.date === TODAY ? { ...d, state: "failed", error: "x" } : d)),
+  }));
+  const outcome = await setWeekDevotionalApproval({ weekId: THIS_WEEK, approve: true, dates: [TODAY] });
+  assert.deepEqual(outcome.changed, []);
+  assert.match(outcome.skipped[0].reason, /nem végleges/);
+});
+
+test("napi hibaüzenet: ismeretlen hibánál a technikai ok is látszik, kulcs kitakarva; ismert hibánál a barátságos szöveg", async () => {
+  const { describeDayFailure } = await import("../src/lib/weekly-plan/day-generation");
+  const unknown = describeDayFailure(
+    new Error("váratlan belső összeomlás a feldolgozásban (AIzaSyA1234567890abcdefghijklmnop)")
+  );
+  assert.match(unknown, /Ismeretlen hiba/);
+  assert.match(unknown, /váratlan belső összeomlás/);
+  assert.equal(unknown.includes("AIzaSy"), false, "kulcs nem szivároghat");
+  assert.ok(unknown.length <= 300);
+
+  assert.match(describeDayFailure(new DayIncompleteError("2026-10-26")), /hiányos/);
+});

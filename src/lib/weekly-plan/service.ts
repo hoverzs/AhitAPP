@@ -84,6 +84,12 @@ export function cleanText(value: unknown, max: number, field: string): string {
   return text;
 }
 
+/** A terv egy napja megváltozott: a meglévő szöveg elavul, különben újra tervezett. */
+function changedState(previous: WeeklyPlanDay["state"]): WeeklyPlanDay["state"] {
+  if (previous === "generating") return previous;
+  return previous === "ready" || previous === "stale" ? "stale" : "planned";
+}
+
 function sameContent(a: WeeklyPlanDay, b: { title: string; verse: string; role: string }): boolean {
   return a.title === b.title && a.verse === b.verse && a.role === b.role;
 }
@@ -104,7 +110,9 @@ function assertFresh(plan: WeeklyPlan, expectedUpdatedAt: string | undefined): v
 }
 
 function hasGeneratedDays(plan: WeeklyPlan): boolean {
-  return plan.days.some((d) => d.state === "ready" || d.state === "generating");
+  return plan.days.some(
+    (d) => d.state === "ready" || d.state === "generating" || d.state === "stale"
+  );
 }
 
 /**
@@ -135,7 +143,7 @@ export function applyDraft(
       category: next.category,
       excerpt: next.excerpt,
       imageKeywords: next.imageKeywords,
-      state: unchanged ? previous.state : "planned",
+      state: unchanged ? previous.state : changedState(previous.state),
       error: unchanged ? previous.error : undefined,
       lastAttemptAt: unchanged ? previous.lastAttemptAt : undefined,
     };
@@ -414,7 +422,7 @@ export async function patchPlan(
       if (!sameContent(day, next)) {
         overrides.delete(day.date);
         if (day.state === "ready") staleDates.push(day.date);
-        next.state = day.state === "generating" ? day.state : "planned";
+        next.state = changedState(day.state);
         next.error = undefined;
       }
       return next;
