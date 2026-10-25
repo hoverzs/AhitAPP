@@ -187,7 +187,7 @@ const cachedPublicWindow = unstable_cache(
     const snapshot = await storage.getPublicWindowDevotionals?.();
     const records =
       snapshot ?? (await storage.getDevotionalsByDates(getPublicWindowDates(today)));
-    return filterPublicDevotionals(records).sort(
+    return filterPublicDevotionals(records, today).sort(
       (a, b) => devotionalDateKey(b).localeCompare(devotionalDateKey(a))
     );
   },
@@ -210,7 +210,7 @@ export async function getPublicWindowDevotionals(): Promise<Devotional[]> {
       const snapshot = await storage.getPublicWindowDevotionals?.();
       const records =
         snapshot ?? (await storage.getDevotionalsByDates(getPublicWindowDates(today)));
-      return filterPublicDevotionals(records);
+      return filterPublicDevotionals(records, today);
     }
     if (isProductionStorageNotConfiguredError(error)) return [];
     throw error;

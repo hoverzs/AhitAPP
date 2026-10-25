@@ -42,6 +42,13 @@ export interface Devotional {
   generatedAt?: string;
   updatedAt?: string;
   status?: DevotionalStatus;
+  /**
+   * Heti sorozat azonosítója (a hét hétfője, YYYY-MM-DD). Csak a heti tervből
+   * készült áhítat kapja. Ilyen áhítatnál a `approved` státusz azt jelenti:
+   * „ütemezett” — a saját napján magától megjelenik; régi (heti azonosító nélküli)
+   * rekordnál a nyilvánossághoz továbbra is `published` kell.
+   */
+  weekId?: string;
   promptVersion?: string;
   generationModel?: string;
   contentCharCount?: number;

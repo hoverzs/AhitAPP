@@ -25,6 +25,7 @@ export function entryToStub(entry: AdminIndexEntry): Devotional {
   return {
     date: entry.date,
     title: entry.title,
+    weekId: entry.weekId,
     verse: entry.verse ?? "",
     content: "",
     imageUrl: "",

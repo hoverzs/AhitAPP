@@ -7,6 +7,7 @@ import {
   normalizeDevotional,
   normalizeDevotionalStatus,
 } from "../../devotional-status";
+import { isPublicStatus } from "../../devotional-status";
 import { PUBLIC_PAST_DAYS } from "../../public-window";
 import type { Devotional } from "../../types";
 import { devotionalDateKey, parseDevotionalList } from "../devotional-validate";
@@ -131,6 +132,7 @@ function toIndexEntry(d: Devotional): IndexEntry {
     title: d.title,
     verse: d.verse,
     category: d.category,
+    weekId: d.weekId,
     generatedAt: d.generatedAt,
     updatedAt: d.updatedAt,
     editedByAdmin: d.editedByAdmin,
@@ -251,7 +253,7 @@ export function createBlobStorage(
 
   function belongsInWindow(d: Devotional): boolean {
     return (
-      normalizeDevotionalStatus(d.status) === "published" &&
+      isPublicStatus(d.status, d.weekId) &&
       Boolean(d.content?.trim()) &&
       devotionalDateKey(d) >= windowCutoff()
     );
@@ -272,7 +274,7 @@ export function createBlobStorage(
     const index = await readIndex(true);
     const cutoff = windowCutoff();
     const dates = index.entries
-      .filter((e) => e.status === "published" && e.date >= cutoff)
+      .filter((e) => isPublicStatus(e.status, e.weekId) && e.date >= cutoff)
       .map((e) => e.date);
     const records = await readRecords(dates, true);
     await writeWindow(records);
@@ -446,9 +448,9 @@ export function createBlobStorage(
     },
 
     /**
-     * Napi retention. Csak a KÖZZÉTETT, cutoff-nál régebbi áhítatot törli az
-     * áhítat dátuma alapján; piszkozat / jóváhagyott / jövőbeli és a legfrissebb
-     * rekord marad. Index-vezérelt: nincs `list`, és (az új indexsorokkal) a
+     * Napi retention. Csak a NYILVÁNOS (közzétett, vagy heti sorozat jóváhagyott),
+     * cutoff-nál régebbi áhítatot törli az áhítat dátuma alapján; piszkozat /
+     * heti azonosító nélküli jóváhagyott / jövőbeli rekord marad. Index-vezérelt: nincs `list`, és (az új indexsorokkal) a
      * rekordok olvasása sem kell. Sorrend: index (ifMatch, újraellenőrzött
      * státusszal) → rekord- és feladat-blobok → saját képek → pillanatkép.
      * Ha a blobtörlés megszakad, árva blob marad (a következő rebuild/retention
@@ -473,7 +475,8 @@ export function createBlobStorage(
         imagesFailed: [],
       };
       for (const date of plan.remove) {
-        if (byDate.get(date)?.status === "published") result.removable.push(date);
+        const entry = byDate.get(date);
+        if (entry && isPublicStatus(entry.status, entry.weekId)) result.removable.push(date);
         else result.keptUnpublished.push(date);
       }
       if (!apply || result.removable.length === 0) return result;
@@ -484,7 +487,7 @@ export function createBlobStorage(
       await mutateJson(BLOB_PATHS.index, emptyIndex, (doc) => {
         removed = [];
         doc.entries = doc.entries.filter((e) => {
-          if (removable.has(e.date) && e.status === "published") {
+          if (removable.has(e.date) && isPublicStatus(e.status, e.weekId)) {
             removed.push(e);
             return false;
           }

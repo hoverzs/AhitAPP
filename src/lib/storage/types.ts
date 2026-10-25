@@ -16,6 +16,8 @@ export interface AdminIndexEntry {
   title: string;
   verse?: string;
   category?: string;
+  /** Heti sorozat azonosítója (a nyilvánosság és a megőrzés ebből dönt). */
+  weekId?: string;
   generatedAt?: string;
   updatedAt?: string;
   editedByAdmin?: boolean;

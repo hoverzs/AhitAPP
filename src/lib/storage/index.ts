@@ -100,6 +100,11 @@ export function setImageStoreForTesting(store: ImageBlobStore | null): void {
   resetDevotionalStorageCache();
 }
 
+/** Az adat store Blob-kliense (heti terv, nyilvántartás stb.). */
+export function getDataBlobClient(): JsonBlobClient {
+  return getBlobClient();
+}
+
 function getBlobClient(): JsonBlobClient {
   if (injectedBlobClient) return injectedBlobClient;
   if (!isBlobStorageConfigured()) {

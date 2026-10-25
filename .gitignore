@@ -39,3 +39,6 @@ next-env.d.ts
 /backups/
 # Redis → Blob export (áhítat-tartalom, ne kerüljön a repóba)
 /exports/
+
+# Helyi heti terv (fejlesztés)
+/data/weekly/

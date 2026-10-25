@@ -22,6 +22,7 @@ export function isValidDevotional(entry: unknown): entry is Devotional {
     hasDate &&
     hasStatus &&
     (d.category === undefined || typeof d.category === "string") &&
+    (d.weekId === undefined || typeof d.weekId === "string") &&
     (d.facebookCopy === undefined || typeof d.facebookCopy === "string") &&
     (d.prayer === undefined || typeof d.prayer === "string") &&
     (d.reflectionQuestion === undefined || typeof d.reflectionQuestion === "string") &&
