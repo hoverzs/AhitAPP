@@ -2,6 +2,8 @@ import { toGeminiErrorDetails } from "./gemini-errors";
 import type { GeminiErrorDebugInfo } from "./gemini-error-labels";
 import { isCronGenerationEnabled } from "./dev-review";
 import { isProductionDeployment } from "./cron-env";
+import { runAutopilot } from "./autopilot/run";
+import { isAutopilotEnabled } from "./autopilot/state";
 import { readDevotionals } from "./devotionals";
 import { isAnyStorageError, storageErrorReason } from "./storage";
 import { GenerationSkippedError } from "./generate-devotional";
@@ -104,6 +106,18 @@ export async function runDailyCronGeneration(options?: {
     const message = "Automatikus generálás kikapcsolva.";
     cronLog(message);
     return { outcome: "blocked_env", message, date, timestamp };
+  }
+
+  // Bekapcsolt autopilot esetén a napi cron az autopilot egyik futása: a régi napi
+  // generálás nem fut (nincs versengés), a tartalékot az autopilot pótolja.
+  if (await isAutopilotEnabled()) {
+    const run = await runAutopilot({ trigger: force ? "admin" : "cron" });
+    const message = `Autopilot (${run.outcome}): ${run.generated} új szöveg, ${run.approved} jóváhagyás, tartalék ${run.reserveDays} nap.${run.events.length ? ` ${run.events.join(" · ")}` : ""}`;
+    cronLog(message, { autopilot: true });
+    if (run.outcome === "failed") {
+      return { outcome: "error", message, error: message, code: "AUTOPILOT_FAILED", date, timestamp };
+    }
+    return { outcome: "skipped", message, date, timestamp };
   }
 
   try {

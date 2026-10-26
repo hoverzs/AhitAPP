@@ -119,10 +119,14 @@ export function buildProposeUserPrompt(params: {
   theme?: string;
   brief?: string;
   registry: PlanRegistry;
+  /** Autopilot: nincs szerkesztői irány — változatos, a naptárhoz illő téma kell. */
+  auto?: boolean;
 }): string {
   const direction = params.theme?.trim()
     ? `Téma / irány a szerkesztőtől: ${params.theme.trim()}`
-    : "A szerkesztő nem adott témát: javasolj ívelő, a korábbiaktól eltérő heti témát.";
+    : params.auto
+      ? "Nincs szerkesztői irány: válassz a korábbiaktól eltérő, ívelő és teológiailag összefüggő heti témát. Ha a hétre jelentős keresztény ünnep vagy emléknap esik (pl. reformáció emléknapja, advent, karácsony, húsvét, pünkösd), vedd figyelembe, de a hét maradjon általánosan is érthető."
+      : "A szerkesztő nem adott témát: javasolj ívelő, a korábbiaktól eltérő heti témát.";
   const brief = params.brief?.trim()
     ? `\nSZERKESZTŐI BRIEF (tartsd magad hozzá: ha konkrét igéket, sorrendet vagy megkötéseket tartalmaz, azokat vedd át; ami hiányzik, azt egészítsd ki):\n"""\n${params.brief.trim()}\n"""\n`
     : "";

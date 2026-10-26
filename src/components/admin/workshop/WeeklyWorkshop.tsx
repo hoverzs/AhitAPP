@@ -21,6 +21,7 @@ import {
   type WeekOverview,
 } from "@/lib/weekly-plan/ui-logic";
 import { GenerateStep } from "./GenerateStep";
+import { AutopilotPanel } from "./AutopilotPanel";
 import { PlanStep } from "./PlanStep";
 import { WeekReadinessBanner } from "./WeekReadinessBanner";
 import { ReviewStep } from "./ReviewStep";
@@ -193,6 +194,8 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
 
       <AdminMain>
         {toast && <AdminToast message={toast} />}
+
+        <AutopilotPanel onToast={setToast} />
 
         {/* Hét-választó */}
         <section className="flex flex-wrap items-center gap-2 md:gap-3" aria-label="Hét kiválasztása">

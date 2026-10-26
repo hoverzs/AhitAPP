@@ -174,6 +174,11 @@ export function DayReviewCard({ view, week, today, busy, onChanged, onToast }: D
               {publicNow ? "Nyilvános az oldalon." : `Megjelenik ${view.date}-án automatikusan.`}
             </p>
           )}
+          {view.canApprove && view.planDay.manualHold && (
+            <p className="mt-1 text-xs text-ink-muted">
+              Kézi kezelés alatt: az autopilot nem hagyja jóvá automatikusan — hagyd jóvá itt.
+            </p>
+          )}
           {!view.canApprove && !view.locked && view.blockedReason && (
             <p className="mt-1 text-xs text-amber-800">{view.blockedReason}</p>
           )}

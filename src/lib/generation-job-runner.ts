@@ -2,6 +2,7 @@ import { getAppTodayIso } from "./app-date";
 import { logGeminiError } from "./gemini-client";
 import { describeErrorForLog, toGeminiErrorDetails } from "./gemini-errors";
 import { getDevotionalByDate as readDevotionalRecord, readDevotionals } from "./devotionals";
+import { isAutopilotEnabled } from "./autopilot/state";
 import { ManagedByWeeklyPlanError } from "./weekly-plan/errors";
 import { getManagingPlan } from "./weekly-plan/management";
 import { isPublicStatus } from "./devotional-status";
@@ -396,6 +397,11 @@ export type ProcessDueRetriesResult =
 export async function processDueGenerationRetries(
   now = new Date()
 ): Promise<ProcessDueRetriesResult> {
+  // Bekapcsolt autopilot mellett a régi óránkénti újrapróba nem fut (az autopilot átvette).
+  if (await isAutopilotEnabled()) {
+    return { processed: false, reason: "Az autopilot átvette a napi generálást." };
+  }
+
   const date = getAppTodayIso(now);
   const job = await getGenerationJob(date);
 

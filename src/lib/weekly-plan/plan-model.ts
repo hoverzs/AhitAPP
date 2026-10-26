@@ -8,6 +8,7 @@ import {
 import { geminiGenerateContentRestDetailed } from "../gemini-fetch";
 import { isGeminiOutputTruncated } from "../gemini-response";
 import { usageForLog } from "../devotional-generation-log";
+import { isAnyStorageError } from "../storage";
 import { WeeklyPlanGenerationError } from "./errors";
 import { PlanParseError, parsePlanJson, type PlanDraft } from "./parse";
 import { buildRepairUserPrompt, WEEK_PLAN_SYSTEM_PROMPT } from "./prompts";
@@ -124,9 +125,10 @@ export async function repairDraftOnce(params: {
     );
     return { draft: repaired, repaired: true };
   } catch (error) {
-    if (error instanceof WeeklyPlanGenerationError) {
-      return { draft: params.draft, repaired: false };
-    }
-    throw error;
+    // A javítás best-effort: bármilyen Gemini-/feldolgozási hiba esetén az eredeti vázlat marad
+    // (a maradék ismétlődést a jóváhagyás úgyis jelzi). Tárolóhibát továbbdobunk.
+    if (isAnyStorageError(error)) throw error;
+    console.warn("[weekly-plan] a javító kör sikertelen — az eredeti vázlat marad:", error instanceof Error ? error.message : error);
+    return { draft: params.draft, repaired: false };
   }
 }

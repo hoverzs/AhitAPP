@@ -129,6 +129,8 @@ export async function generateWeekDay(
     /** A másik forrásból (napi folyamat) származó, előkészített áhítat kiváltása — kifejezett megerősítéssel. */
     replace?: boolean;
     confirmReplace?: boolean;
+    /** Az autopilot hívja (a szerkesztői kézbentartás ilyenkor nem kapcsol be). */
+    byAutopilot?: boolean;
     today?: string;
     now?: () => Date;
   },
@@ -235,6 +237,8 @@ export async function generateWeekDay(
       state: "ready",
       error: undefined,
       lastAttemptAt: now().toISOString(),
+      // Kézi (szerkesztői) generálás után a nap kézbentartott: az autopilot nem hagyja jóvá helyette.
+      manualHold: params.byAutopilot ? undefined : true,
       replacement:
         replace && d.replacement ? { ...d.replacement, executedAt: now().toISOString() } : d.replacement,
     }));
@@ -311,6 +315,16 @@ export async function setWeekDevotionalApproval(
       await updateDevotionalStatus(date, "needs_review", { weeklyFlow: true });
       outcome.changed.push(date);
     }
+  }
+
+  // Kézbentartás: a visszavont nap az autopilot elől is védett, a jóváhagyás feloldja.
+  if (outcome.changed.length > 0) {
+    await s.updatePlan(params.weekId, (live) => ({
+      ...live,
+      days: live.days.map((d) =>
+        outcome.changed.includes(d.date) ? { ...d, manualHold: params.approve ? undefined : true } : d
+      ),
+    }));
   }
   return outcome;
 }

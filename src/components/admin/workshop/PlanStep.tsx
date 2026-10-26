@@ -7,7 +7,7 @@ import { AdminPanel } from "@/components/admin/ui/AdminPanel";
 import { WEEKDAY_NAMES_HU } from "@/lib/weekly-plan/prompts";
 import type { WeeklyPlan, WeeklyPlanDay } from "@/lib/weekly-plan/types";
 import { DAY_LABEL_HU, planStepState, type WeekOverview } from "@/lib/weekly-plan/ui-logic";
-import { planAction, WorkshopApiError, type PlanActionResult } from "./workshop-api";
+import { handToAutopilot, planAction, WorkshopApiError, type PlanActionResult } from "./workshop-api";
 
 interface PlanStepProps {
   week: string;
@@ -392,6 +392,13 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
       () => onToast("A terv újra szerkeszthető.")
     );
 
+  const giveToAutopilot = () =>
+    run(
+      "autopilot",
+      () => handToAutopilot(week, plan.updatedAt),
+      () => onToast("A terv átadva az autopilotnak: a hiányzó napokat ő pótolja és hagyja jóvá.")
+    );
+
   const removeDraft = () =>
     run(
       "delete",
@@ -400,7 +407,13 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
     );
 
   const sourceLabel =
-    plan.source === "gemini" ? "Gemini-javaslat" : plan.source === "brief" ? "Szerkesztői brief / import" : "Kézi";
+    plan.source === "auto"
+      ? "Automatikus (autopilot, Gemini)"
+      : plan.source === "gemini"
+        ? "Gemini-javaslat"
+        : plan.source === "brief"
+          ? "Szerkesztői brief / import"
+          : "Kézi";
 
   return (
     <div className="space-y-6">
@@ -641,6 +654,17 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
             <AdminButton variant="ghost" disabled={disabled || !editable} onClick={() => setConfirm("reopen")}>
               Visszanyitás szerkesztésre
             </AdminButton>
+            {plan.source !== "auto" && (
+              <AdminButton variant="ghost" disabled={disabled || !editable} onClick={giveToAutopilot}>
+                {busy === "autopilot" ? "Átadás…" : "Átadás az autopilotnak"}
+              </AdminButton>
+            )}
+            {plan.source === "auto" && (
+              <p className="basis-full text-xs text-ink-muted">
+                Ezt a tervet az autopilot készítette. Ha visszanyitod és szerkeszted, kézi tervvé válik, és az
+                autopilot nem nyúl hozzá, amíg vissza nem adod neki.
+              </p>
+            )}
           </div>
         )}
       </AdminPanel>
@@ -661,7 +685,7 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
       {confirm === "reopen" && (
         <ConfirmDialog
           title="Visszanyitás szerkesztésre"
-          message="A jóváhagyott terv újra vázlat lesz. Ha megváltoztatsz egy napot, annak már elkészült szövege elavult lesz, és újra kell generálni."
+          message="A jóváhagyott terv újra vázlat lesz. Ha megváltoztatsz egy napot, annak már elkészült szövege elavult lesz, és újra kell generálni. Az autopilot által készített terv ezzel kézi tervvé válik: az autopilot nem nyúl hozzá, amíg vissza nem adod neki."
           confirmLabel="Visszanyitás"
           loading={busy === "reopen"}
           onCancel={() => setConfirm(null)}

@@ -260,14 +260,21 @@ function assertReplaceable(existing: WeeklyPlan | null): void {
  * ismétlődő igehelyeket egy automatikus javító kör próbálja kiszűrni.
  */
 export async function proposePlan(
-  params: { weekId: string; theme?: string; brief?: string; today?: string },
+  params: {
+    weekId: string;
+    theme?: string;
+    brief?: string;
+    today?: string;
+    /** Autopilot: téma és brief nélkül, a terv forrása „auto”. */
+    auto?: boolean;
+  },
   store?: WeeklyPlanStore
 ): Promise<PlanOperationResult> {
   const s = storeOf(store);
   assertWeekEditable(params.weekId, params.today);
   const theme = cleanText(params.theme, LIMITS.themeRequest, "téma");
   const brief = cleanText(params.brief, LIMITS.brief, "brief");
-  if (!theme && !brief) {
+  if (!theme && !brief && !params.auto) {
     throw new WeeklyPlanInputError("Adj meg rövid témát vagy szerkesztői briefet.");
   }
 
@@ -276,13 +283,13 @@ export async function proposePlan(
   const registry = await readEffectiveRegistry(s);
 
   let draft = await requestPlanDraft(
-    buildProposeUserPrompt({ weekId: params.weekId, theme, brief, registry }),
+    buildProposeUserPrompt({ weekId: params.weekId, theme, brief, registry, auto: params.auto }),
     "propose"
   );
   const repaired = await maybeRepair(params.weekId, draft, registry);
   draft = repaired.draft;
 
-  const source: WeeklyPlanSource = brief ? "brief" : "gemini";
+  const source: WeeklyPlanSource = params.auto ? "auto" : brief ? "brief" : "gemini";
   const { plan, staleDates } = await persistDraft(
     s,
     params.weekId,
@@ -545,7 +552,40 @@ export async function reopenPlan(
   }
   const plan = await s.updatePlan(params.weekId, (live) => {
     if (live.updatedAt !== current.updatedAt) throw new WeeklyPlanConflictError(live);
-    return { ...live, status: "draft", approvedAt: undefined };
+    // A szerkesztő átvette a tervet: az autopilot innentől nem nyúl hozzá (és nem hagyja jóvá a vázlatot).
+    return {
+      ...live,
+      status: "draft",
+      approvedAt: undefined,
+      source: live.source === "auto" ? "manual" : live.source,
+    };
+  });
+  return describe(s, plan);
+}
+
+/**
+ * A jóváhagyott kézi terv visszaadása az autopilotnak: a hiányzó napok szövegét
+ * ő pótolja és hagyja jóvá. A kézbentartási jelzések törlődnek.
+ */
+export async function handToAutopilot(
+  params: { weekId: string; expectedUpdatedAt?: string; today?: string },
+  store?: WeeklyPlanStore
+): Promise<PlanOperationResult> {
+  const s = storeOf(store);
+  assertWeekEditable(params.weekId, params.today);
+  const current = await s.getPlan(params.weekId);
+  if (!current) throw new WeeklyPlanInputError("Erre a hétre még nincs terv.");
+  assertFresh(current, params.expectedUpdatedAt);
+  if (current.status !== "approved") {
+    throw new WeeklyPlanLockedError("Az autopilotnak csak jóváhagyott terv adható át.");
+  }
+  const plan = await s.updatePlan(params.weekId, (live) => {
+    if (live.updatedAt !== current.updatedAt) throw new WeeklyPlanConflictError(live);
+    return {
+      ...live,
+      source: "auto",
+      days: live.days.map((d) => ({ ...d, manualHold: undefined, autoAttempts: 0 })),
+    };
   });
   return describe(s, plan);
 }

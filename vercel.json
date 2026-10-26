@@ -5,6 +5,18 @@
       "schedule": "5 0 * * *"
     },
     {
+      "path": "/api/cron/autopilot",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/autopilot",
+      "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/cron/autopilot",
+      "schedule": "30 20 * * *"
+    },
+    {
       "path": "/api/cron/prune-devotionals",
       "schedule": "0 3 * * *"
     }

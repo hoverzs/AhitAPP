@@ -130,6 +130,10 @@ export function restoreReplaced(
   return planAction("restore_replaced", week, { date, confirm: true });
 }
 
+export function handToAutopilot(week: string, expectedUpdatedAt: string): Promise<PlanActionResult> {
+  return planAction<PlanActionResult>("hand_to_autopilot", week, { expectedUpdatedAt });
+}
+
 export interface ApprovalResponse {
   changed: string[];
   skipped: { date: string; reason: string }[];

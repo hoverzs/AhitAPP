@@ -22,6 +22,7 @@ import {
   deletePlanDraft,
   importPlan,
   patchPlan,
+  handToAutopilot,
   proposePlan,
   readEffectiveRegistry,
   reopenPlan,
@@ -161,6 +162,11 @@ export async function POST(request: NextRequest) {
             weekId,
             expectedUpdatedAt: requiredString(body, "expectedUpdatedAt"),
           })
+        );
+
+      case "hand_to_autopilot":
+        return NextResponse.json(
+          await handToAutopilot({ weekId, expectedUpdatedAt: requiredString(body, "expectedUpdatedAt") })
         );
 
       case "delete":

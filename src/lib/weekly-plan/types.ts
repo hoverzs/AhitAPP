@@ -12,7 +12,8 @@ export const WEEKLY_PLAN_VERSION = 1;
 
 export type WeeklyPlanStatus = "draft" | "approved";
 /** Honnan származik a terv: Gemini javaslat, beillesztett brief vagy kézi. */
-export type WeeklyPlanSource = "gemini" | "brief" | "manual";
+/** auto: az autopilot tervezte (Gemini), a szövegei automatikusan jóváhagyódnak. */
+export type WeeklyPlanSource = "gemini" | "brief" | "manual" | "auto";
 /**
  * planned: még nincs szöveg · generating: készül · ready: kész · failed: sikertelen ·
  * stale: van szöveg, de a terv ezen napja azóta megváltozott (újragenerálni kell).
@@ -20,7 +21,7 @@ export type WeeklyPlanSource = "gemini" | "brief" | "manual";
 export type WeeklyPlanDayState = "planned" | "generating" | "ready" | "failed" | "stale";
 
 export const WEEKLY_PLAN_STATUSES: WeeklyPlanStatus[] = ["draft", "approved"];
-export const WEEKLY_PLAN_SOURCES: WeeklyPlanSource[] = ["gemini", "brief", "manual"];
+export const WEEKLY_PLAN_SOURCES: WeeklyPlanSource[] = ["gemini", "brief", "manual", "auto"];
 export const WEEKLY_PLAN_DAY_STATES: WeeklyPlanDayState[] = [
   "planned",
   "generating",
@@ -62,6 +63,15 @@ export interface WeeklyPlanDay {
   lastAttemptAt?: string;
   /** Régi napi áhítat kiváltása (csak ha a napon már volt másik forrásból származó áhítat). */
   replacement?: DayReplacement;
+  /** Az autopilot aznapi (autoAttemptsDate) generálási kísérletei — napi korlát. */
+  autoAttempts?: number;
+  autoAttemptsDate?: string;
+  /**
+   * Szerkesztői kézbentartás: a nap szövegét egy ember vonta vissza / generálta
+   * kézzel. Az autopilot ezt a napot nem hagyja jóvá automatikusan — csak a
+   * szerkesztő jóváhagyása oldja fel.
+   */
+  manualHold?: boolean;
 }
 
 export interface WeeklyPlan {
