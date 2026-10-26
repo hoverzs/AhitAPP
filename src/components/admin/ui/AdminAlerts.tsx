@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AdminButton } from "./AdminButton";
 import { AdminPanel } from "./AdminPanel";
 import {
@@ -50,9 +51,11 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   loading,
+  extra,
 }: {
   title: string;
   message: string;
+  extra?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
@@ -62,6 +65,7 @@ export function ConfirmDialog({
     <div className="admin-modal-backdrop">
       <AdminPanel title={title} className="admin-modal max-w-md w-full">
         <p className="text-sm text-ink-muted leading-relaxed">{message}</p>
+        {extra}
         <div className="mt-6 flex gap-3 justify-end">
           <AdminButton variant="ghost" onClick={onCancel}>
             Mégse

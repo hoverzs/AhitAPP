@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       force: optionalBoolean(body, "force"),
       replace: optionalBoolean(body, "replace"),
       confirmReplace: optionalBoolean(body, "confirm"),
+      approveAfter: optionalBoolean(body, "approveAfter"),
     });
     return NextResponse.json(result);
   } catch (error) {

@@ -29,6 +29,7 @@ export function ReplacementControls({ view, week, busy, onChanged, onToast }: Re
   const [working, setWorking] = useState<"prepare" | "execute" | "restore" | null>(null);
   const [dialog, setDialog] = useState<"execute" | "restore" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [approveAfter, setApproveAfter] = useState(true);
 
   const rep = view.replacement;
   const show = view.canPrepareReplacement || view.canExecuteReplacement || view.canRestoreReplacement;
@@ -60,8 +61,10 @@ export function ReplacementControls({ view, week, busy, onChanged, onToast }: Re
 
   const execute = () =>
     run("execute", async () => {
-      await executeReplacement(week, view.date);
-      return "A csere megtörtént: az új áhítat ellenőrzésre vár (a régi a mentésben és a verziótörténetben megmaradt).";
+      await executeReplacement(week, view.date, approveAfter);
+      return approveAfter
+        ? "A csere megtörtént: az új áhítat jóváhagyva és nyilvános (a régi a mentésben és a verziótörténetben megmaradt)."
+        : "A csere megtörtént: az új áhítat ellenőrzésre vár (a régi a mentésben és a verziótörténetben megmaradt).";
     });
 
   const restore = () =>
@@ -131,7 +134,18 @@ export function ReplacementControls({ view, week, busy, onChanged, onToast }: Re
       {dialog === "execute" && (
         <ConfirmDialog
           title="Csere végrehajtása"
-          message={`Most készül az új áhítat a heti tervből. A régi áhítat addig élő marad, és csak akkor cserélődik le, ha az új szöveg hiánytalanul elkészült (hiba esetén a régi érintetlen). A csere után az új áhítat ellenőrzésre vár — a jóváhagyásig a(z) ${view.date} nap nyilvánosan üres lesz. A régi szöveg bármikor visszaállítható.`}
+          message={`Most készül az új áhítat a heti tervből. A régi áhítat addig élő marad, és csak akkor cserélődik le, ha az új szöveg hiánytalanul elkészült (hiba esetén a régi érintetlen). ${approveAfter ? `A csere egyetlen lépésben történik: az új áhítat azonnal jóváhagyott és nyilvános, a(z) ${view.date} nap nem marad üresen.` : `A csere után az új áhítat ellenőrzésre vár — a jóváhagyásig a(z) ${view.date} nap nyilvánosan üres lesz.`} A régi szöveg bármikor visszaállítható.`}
+          extra={
+            <label className="mt-4 flex items-start gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={approveAfter}
+                onChange={(e) => setApproveAfter(e.target.checked)}
+              />
+              <span>Siker esetén azonnal jóváhagyás és nyilvánosság (kézi jóváhagyás nélkül)</span>
+            </label>
+          }
           confirmLabel="Csere végrehajtása"
           loading={working === "execute"}
           onCancel={() => setDialog(null)}

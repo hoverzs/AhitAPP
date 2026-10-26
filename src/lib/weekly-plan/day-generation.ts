@@ -129,6 +129,12 @@ export async function generateWeekDay(
     /** A másik forrásból (napi folyamat) származó, előkészített áhítat kiváltása — kifejezett megerősítéssel. */
     replace?: boolean;
     confirmReplace?: boolean;
+    /**
+     * Csak cserénél: a teljes, sikeres új szöveg egyetlen mentéssel `approved` lesz — a régi
+     * `published` rekord helyett azonnal nyilvános, rés nélkül, kézi jóváhagyás nélkül.
+     * Hiányos szövegnél a csere el sem indul (a régi érintetlen).
+     */
+    approveAfter?: boolean;
     /** Az autopilot hívja (a szerkesztői kézbentartás ilyenkor nem kapcsol be). */
     byAutopilot?: boolean;
     today?: string;
@@ -154,6 +160,9 @@ export async function generateWeekDay(
 
   const existing = await getDevotionalByDate(day.date);
   const replace = params.replace === true;
+  if (params.approveAfter && !replace) {
+    throw new WeeklyPlanInputError("Az approveAfter csak cserénél (replace) használható.");
+  }
   if (replace) {
     // Biztonságos csere: csak előkészített (mentett), még nem végrehajtott cseréhez, a régi rekord változatlansága esetén.
     if (params.confirmReplace !== true) {
@@ -225,8 +234,17 @@ export async function generateWeekDay(
     );
     devotional.date = day.date;
     devotional.weekId = params.weekId;
-    // Szerkesztői kontroll: a friss szöveg mindig ellenőrzésre vár, amíg jóvá nem hagyják.
-    devotional.status = "needs_review";
+    // Csere + approveAfter: csak hiánytalan szöveg válthatja a régi, élő áhítatot.
+    const approveNow = replace && params.approveAfter === true;
+    if (
+      approveNow &&
+      (devotional.lastApiError === TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE || !devotional.content?.trim())
+    ) {
+      throw new DayIncompleteError(day.date);
+    }
+    // Szerkesztői kontroll: a friss szöveg ellenőrzésre vár, amíg jóvá nem hagyják
+    // (kivétel: approveAfter — a teljes szöveg azonnal jóváhagyott).
+    devotional.status = approveNow ? "approved" : "needs_review";
     devotional.lastApiError = undefined;
 
     const saved = regenerate
@@ -238,7 +256,7 @@ export async function generateWeekDay(
       error: undefined,
       lastAttemptAt: now().toISOString(),
       // Kézi (szerkesztői) generálás után a nap kézbentartott: az autopilot nem hagyja jóvá helyette.
-      manualHold: params.byAutopilot ? undefined : true,
+      manualHold: params.byAutopilot || params.approveAfter ? undefined : true,
       replacement:
         replace && d.replacement ? { ...d.replacement, executedAt: now().toISOString() } : d.replacement,
     }));

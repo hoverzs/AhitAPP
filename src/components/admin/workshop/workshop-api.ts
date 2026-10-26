@@ -115,11 +115,15 @@ export function prepareReplacement(
 }
 
 /** A régi áhítat kiváltása: az új szöveg generálása és csak siker esetén a csere. */
-export function executeReplacement(week: string, date: string): Promise<GenerateDayResponse> {
+export function executeReplacement(
+  week: string,
+  date: string,
+  approveAfter = false
+): Promise<GenerateDayResponse> {
   return request<GenerateDayResponse>("/api/admin/weekly-plan/day", {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ week, date, replace: true, confirm: true }),
+    body: JSON.stringify({ week, date, replace: true, confirm: true, approveAfter }),
   });
 }
 

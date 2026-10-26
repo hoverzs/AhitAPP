@@ -396,3 +396,113 @@ test("a napi folyamat korábbi igehelye ütközésként jelenik meg a heti tervb
   assert.ok(errors.some((e) => e.includes("Példabeszédek 4:18") && e.includes("Az Igaz Út")), "a tegnapi napi igehely ütközik");
   assert.equal(errors.some((e) => e.includes("Máté 6:21")), false, "a kiváltandó mai nap saját igéje nem ütközik");
 });
+
+// ── rés nélküli csere (approveAfter) ────────────────────────────────────────
+
+test("approveAfter: a teljes új szöveg egyetlen mentéssel jóváhagyott és azonnal nyilvános, a többi nap és a terv érintetlen", async () => {
+  const legacy = await legacyToday();
+  await approvedPlan();
+  // a hét másik napja már kész és jóváhagyott (az autopilot munkája) — ennek változatlannak kell maradnia
+  const otherDate = addDaysToIsoDate(TODAY, 1);
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  await generateWeekDay({ weekId: THIS_WEEK, date: otherDate, byAutopilot: true });
+  await setWeekDevotionalApproval({ weekId: THIS_WEEK, approve: true, dates: [otherDate] });
+  const otherBefore = JSON.stringify(await getDevotionalByDate(otherDate));
+  const planBefore = (await getWeeklyPlanStore().getPlan(THIS_WEEK))!;
+  const otherDayBefore = JSON.stringify(planBefore.days.find((d) => d.date === otherDate));
+  const planCallsBefore = gemini.planCalls().length;
+
+  await prepareReplacement({ weekId: THIS_WEEK, date: TODAY });
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  const result = await generateWeekDay({
+    weekId: THIS_WEEK,
+    date: TODAY,
+    replace: true,
+    confirmReplace: true,
+    approveAfter: true,
+  });
+
+  const record = (await getDevotionalByDate(TODAY))!;
+  assert.equal(record.status, "approved", "azonnal jóváhagyott");
+  assert.equal(record.weekId, THIS_WEEK);
+  assert.match(record.title, /Bűnbánat 1/);
+  assert.equal(record.versionHistory?.[0].content, legacy.content, "a régi szöveg a történetben");
+  assert.equal(result.regenerated, true);
+
+  const visible = await getPublicWindowDevotionals();
+  assert.equal(visible.length, 1, "a mai nap nem maradt üresen");
+  assert.equal(visible[0].weekId, THIS_WEEK);
+  assert.equal(visible[0].title, record.title);
+
+  const day = await dayOf();
+  assert.equal(day.state, "ready");
+  assert.equal(day.manualHold, undefined, "nincs kézi kezelés: az autopilot számára is kész");
+  assert.ok(day.replacement?.executedAt);
+
+  // a többi érintetlen, új tervezés nem indult
+  assert.equal(JSON.stringify(await getDevotionalByDate(otherDate)), otherBefore);
+  const planAfter = (await getWeeklyPlanStore().getPlan(THIS_WEEK))!;
+  assert.equal(JSON.stringify(planAfter.days.find((d) => d.date === otherDate)), otherDayBefore);
+  assert.equal(planAfter.theme, planBefore.theme);
+  assert.equal(planAfter.status, "approved");
+  assert.equal(gemini.planCalls().length, planCallsBefore, "a csere nem tervez újra");
+});
+
+test("approveAfter: hiányos új szövegnél a régi áhítat érintetlen és nyilvános marad", async () => {
+  const legacy = await legacyToday();
+  await approvedPlan();
+  await prepareReplacement({ weekId: THIS_WEEK, date: TODAY });
+  gemini.bodyReplies.push({ text: TRUNCATED_BODY, finishReason: "MAX_TOKENS" });
+  gemini.bodyReplies.push({ text: TRUNCATED_BODY, finishReason: "MAX_TOKENS" });
+
+  await assert.rejects(
+    generateWeekDay({ weekId: THIS_WEEK, date: TODAY, replace: true, confirmReplace: true, approveAfter: true }),
+    DayIncompleteError
+  );
+  const live = (await getDevotionalByDate(TODAY))!;
+  assert.equal(live.title, legacy.title);
+  assert.equal(live.status, "published");
+  assert.equal(live.weekId, undefined);
+  assert.equal((await getPublicWindowDevotionals()).length, 1);
+  assert.equal((await dayOf()).replacement?.executedAt, undefined, "a csere nem hajtódott végre");
+});
+
+test("approveAfter csak cserénél használható; megerősítés nélkül sem fut", async () => {
+  await legacyToday();
+  await approvedPlan();
+  await assert.rejects(
+    generateWeekDay({ weekId: THIS_WEEK, date: addDaysToIsoDate(TODAY, 1), approveAfter: true }),
+    /csak cserénél/
+  );
+  await prepareReplacement({ weekId: THIS_WEEK, date: TODAY });
+  await assert.rejects(
+    generateWeekDay({ weekId: THIS_WEEK, date: TODAY, replace: true, approveAfter: true }),
+    /megerősítés/
+  );
+  assert.equal(gemini.bodyCalls().length, 0);
+});
+
+test("approveAfter után a régi áhítat visszaállítható; az API átadja a paramétert", async () => {
+  const legacy = await legacyToday();
+  await approvedPlan();
+  const main = await import("../src/app/api/admin/weekly-plan/route");
+  const day = await import("../src/app/api/admin/weekly-plan/day/route");
+
+  await main.POST(post("/api/admin/weekly-plan", { action: "prepare_replacement", week: THIS_WEEK, date: TODAY }));
+  gemini.bodyReplies.push({ text: FULL_BODY });
+  const res = await day.POST(
+    post("/api/admin/weekly-plan/day", { week: THIS_WEEK, date: TODAY, replace: true, confirm: true, approveAfter: true })
+  );
+  assert.equal(res.status, 200);
+  assert.equal((await getDevotionalByDate(TODAY))?.status, "approved");
+
+  const bad = await day.POST(
+    post("/api/admin/weekly-plan/day", { week: THIS_WEEK, date: TODAY, replace: true, confirm: true, approveAfter: "igen" })
+  );
+  assert.equal(bad.status, 400);
+
+  const restored = await restoreReplaced({ weekId: THIS_WEEK, date: TODAY, confirm: true });
+  assert.equal(restored.devotional.title, legacy.title);
+  assert.equal(restored.devotional.status, "published");
+  assert.equal((await getPublicWindowDevotionals())[0].title, legacy.title);
+});
