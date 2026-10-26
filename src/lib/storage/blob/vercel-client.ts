@@ -23,6 +23,16 @@ import {
  */
 const JSON_CACHE_MAX_AGE_SECONDS = 60;
 
+/**
+ * A Blob CDN a ~1 KB-nál nagyobb szöveges választ tömöríti (brotli), és ilyenkor
+ * a letöltés ETag-je GYENGE (`W/"…"`, esetleg `-br` / `-gzip` utótaggal), míg az
+ * írás feltétele (`ifMatch`) az ERŐS ETag-et várja. Normalizálás nélkül minden
+ * ütközésbiztos újraírás elutasul. Itt mindkét irányban az erős alakra hozzuk.
+ */
+export function normalizeBlobEtag(etag: string): string {
+  return etag.trim().replace(/^W\//, "").replace(/-(?:br|gzip|zstd|deflate)"$/, '"');
+}
+
 export type VercelBlobMappedError =
   | BlobPreconditionError
   | BlobAlreadyExistsError
@@ -79,7 +89,7 @@ export function createVercelBlobClient(
         });
         if (!result || result.statusCode !== 200) return null;
         const text = await readText(result.stream);
-        return { text, etag: result.blob.etag } satisfies BlobTextResult;
+        return { text, etag: normalizeBlobEtag(result.blob.etag) } satisfies BlobTextResult;
       } catch (error) {
         if (error instanceof BlobNotFoundError) return null;
         throw mapVercelBlobError(error, pathname);
@@ -94,7 +104,7 @@ export function createVercelBlobClient(
           addRandomSuffix: false,
           allowOverwrite: putOptions?.overwrite !== false,
           cacheControlMaxAge: JSON_CACHE_MAX_AGE_SECONDS,
-          ...(putOptions?.ifMatch ? { ifMatch: putOptions.ifMatch } : {}),
+          ...(putOptions?.ifMatch ? { ifMatch: normalizeBlobEtag(putOptions.ifMatch) } : {}),
           ...auth,
         });
         return { etag: result.etag };
