@@ -10,12 +10,14 @@ import {
   DayBusyError,
   DayConflictError,
   DayIncompleteError,
+  ReplacementStaleError,
   WeeklyPlanConflictError,
   WeeklyPlanGenerationError,
   WeeklyPlanInputError,
   WeeklyPlanLockedError,
   WeeklyPlanNotApprovableError,
 } from "./errors";
+import { describeDayFailure } from "./day-generation";
 import { PlanParseError } from "./parse";
 import { BRIEF_FORMAT_EXAMPLE, WEEKDAY_NAMES_HU } from "./prompts";
 import { assertWeekEditable } from "./service";
@@ -203,7 +205,8 @@ export function weeklyPlanErrorResponse(error: unknown): NextResponse {
     error instanceof WeeklyPlanExistsError ||
     error instanceof DayBusyError ||
     error instanceof DayAlreadyReadyError ||
-    error instanceof DayConflictError
+    error instanceof DayConflictError ||
+    error instanceof ReplacementStaleError
   ) {
     return NextResponse.json(
       { error: error.message, code: error.name.replace(/Error$/, "").toUpperCase() },
@@ -221,7 +224,9 @@ export function weeklyPlanErrorResponse(error: unknown): NextResponse {
   }
 
   logGeminiError(error, "weekly-plan");
-  return NextResponse.json(buildGeminiErrorApiPayload(toGeminiErrorDetails(error)), {
-    status: 500,
-  });
+  // Ismeretlen hibánál a technikai ok is látszik (kulcsszerű részek kitakarva).
+  return NextResponse.json(
+    { ...buildGeminiErrorApiPayload(toGeminiErrorDetails(error)), error: describeDayFailure(error) },
+    { status: 500 }
+  );
 }

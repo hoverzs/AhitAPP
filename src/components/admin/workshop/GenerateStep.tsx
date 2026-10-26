@@ -11,6 +11,7 @@ import {
   type DayView,
   type WeekOverview,
 } from "@/lib/weekly-plan/ui-logic";
+import { ReplacementControls } from "./ReplacementControls";
 import { generateDay, WorkshopApiError } from "./workshop-api";
 
 interface GenerateStepProps {
@@ -161,7 +162,7 @@ export function GenerateStep({
   }
 
   const percent = progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
-  const allDone = progress.remaining === 0 && progress.generating === 0;
+  const allDone = progress.remaining === 0 && progress.generating === 0 && progress.foreign === 0;
 
   return (
     <div className="space-y-6">
@@ -206,7 +207,9 @@ export function GenerateStep({
               onClick={() => runQueue(queue)}
             >
               {queue.length === 0
-                ? "Minden nap kész"
+                ? progress.foreign > 0
+                  ? "Nincs automatikusan generálható nap"
+                  : "Minden nap kész"
                 : progress.done > 0 || progress.failed > 0
                   ? `Folytatás — ${queue.length} hiányzó áhítat`
                   : `Hiányzó áhítatok generálása (${queue.length})`}
@@ -249,6 +252,11 @@ export function GenerateStep({
                 <span className={LABEL_TONE[v.label] ?? "admin-chip"}>
                   {isCurrent ? "Készül…" : DAY_LABEL_HU[v.label]}
                 </span>
+                {(v.canPrepareReplacement || v.canExecuteReplacement || v.canRestoreReplacement) && canGenerate && (
+                  <div className="basis-full">
+                    <ReplacementControls view={v} week={week} busy={running || liveElsewhere} onChanged={onChanged} onToast={onToast} />
+                  </div>
+                )}
                 {v.needsGeneration && !running && !liveElsewhere && canGenerate && (
                   <AdminButton size="sm" onClick={() => runQueue([v.date])}>
                     {v.label === "failed" || v.label === "interrupted" || v.label === "stale"

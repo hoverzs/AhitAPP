@@ -99,6 +99,37 @@ export function generateDay(week: string, date: string, force = false): Promise<
   });
 }
 
+export interface ReplacementInfo {
+  backupId: string;
+  backupPath: string;
+  previousStatus: string;
+  previousTitle: string;
+  preparedAt: string;
+}
+
+export function prepareReplacement(
+  week: string,
+  date: string
+): Promise<{ plan: WeeklyPlan; replacement: ReplacementInfo; reused: boolean }> {
+  return planAction("prepare_replacement", week, { date });
+}
+
+/** A régi áhítat kiváltása: az új szöveg generálása és csak siker esetén a csere. */
+export function executeReplacement(week: string, date: string): Promise<GenerateDayResponse> {
+  return request<GenerateDayResponse>("/api/admin/weekly-plan/day", {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ week, date, replace: true, confirm: true }),
+  });
+}
+
+export function restoreReplaced(
+  week: string,
+  date: string
+): Promise<{ plan: WeeklyPlan; devotional: Devotional; source: string }> {
+  return planAction("restore_replaced", week, { date, confirm: true });
+}
+
 export interface ApprovalResponse {
   changed: string[];
   skipped: { date: string; reason: string }[];

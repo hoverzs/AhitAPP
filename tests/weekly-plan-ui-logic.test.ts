@@ -303,3 +303,53 @@ test("heti állapot: a terv jóváhagyása és a publikálásra kész hét kül�
   assert.equal(done.publicNow, 2, "10-26 és 10-27 már elérkezett");
   assert.equal(done.scheduled, 5);
 });
+
+test("csere: a másik forrásból származó nap lépései (előkészítés → végrehajtás → visszaállítás)", () => {
+  const foreignSummary = { status: "published", title: "Régi", weekId: undefined };
+  const p = plan();
+  const day = p.days[0];
+
+  const none = describeDay(WEEK, day, { weekday: "Hétfő", devotional: foreignSummary }, NOW);
+  assert.equal(none.label, "foreign");
+  assert.equal(none.canPrepareReplacement, true);
+  assert.equal(none.canExecuteReplacement, false);
+  assert.equal(none.needsGeneration, false, "a tömeges sor nem érinti");
+
+  const replacement = {
+    backupId: "b1",
+    backupPath: "backups/2026-10-26/b1.json",
+    previousStatus: "published",
+    previousTitle: "Régi",
+    recordUpdatedAt: "x",
+    preparedAt: "2026-10-26T08:00:00.000Z",
+  };
+  const prepared = describeDay(WEEK, { ...day, replacement }, { weekday: "Hétfő", devotional: foreignSummary }, NOW);
+  assert.equal(prepared.canPrepareReplacement, false);
+  assert.equal(prepared.canExecuteReplacement, true);
+  assert.equal(prepared.needsGeneration, false);
+
+  // sikertelen csere: az ok látszik, az előkészítés megmarad
+  const failed = describeDay(
+    WEEK,
+    { ...day, replacement, state: "failed", error: "Gemini hiba" },
+    { weekday: "Hétfő", devotional: foreignSummary },
+    NOW
+  );
+  assert.match(failed.blockedReason!, /csere generálása sikertelen.*Gemini hiba/);
+  assert.equal(failed.canExecuteReplacement, true);
+
+  // végrehajtott csere: heti rekord, visszaállítható
+  const executed = describeDay(
+    WEEK,
+    { ...day, state: "ready", replacement: { ...replacement, executedAt: "2026-10-26T09:00:00.000Z" } },
+    { weekday: "Hétfő", devotional: { status: "needs_review", title: "Új", weekId: WEEK } },
+    NOW
+  );
+  assert.equal(executed.canRestoreReplacement, true);
+  assert.equal(executed.canPrepareReplacement, false);
+  assert.equal(executed.label, "review");
+
+  // a generáló sor nem „kész”, amíg van kiváltásra váró nap
+  const views = describeWeek(overview(plan(), [foreignSummary]), NOW);
+  assert.equal(generationProgress(views).foreign, 1);
+});

@@ -29,6 +29,23 @@ export const WEEKLY_PLAN_DAY_STATES: WeeklyPlanDayState[] = [
   "stale",
 ];
 
+/**
+ * A napi folyamatból származó (régi) áhítat biztonságos kiváltásának állapota.
+ * A régi szöveg teljes mentése a `backupPath` alatt van; a csere csak a friss
+ * szöveg sikeres elkészülte után ír, a régi változat visszaállítható.
+ */
+export interface DayReplacement {
+  backupId: string;
+  backupPath: string;
+  previousStatus: string;
+  previousTitle: string;
+  /** A mentéskor érvényes rekord `updatedAt`-ja — ha azóta változott, a csere nem fut le. */
+  recordUpdatedAt: string;
+  preparedAt: string;
+  executedAt?: string;
+  restoredAt?: string;
+}
+
 export interface WeeklyPlanDay {
   /** A nap (YYYY-MM-DD) — megegyezik a belőle készülő áhítat azonosítójával. */
   date: string;
@@ -43,6 +60,8 @@ export interface WeeklyPlanDay {
   state: WeeklyPlanDayState;
   error?: string;
   lastAttemptAt?: string;
+  /** Régi napi áhítat kiváltása (csak ha a napon már volt másik forrásból származó áhítat). */
+  replacement?: DayReplacement;
 }
 
 export interface WeeklyPlan {

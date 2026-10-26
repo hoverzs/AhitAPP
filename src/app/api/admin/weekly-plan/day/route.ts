@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       weekId,
       date,
       force: optionalBoolean(body, "force"),
+      replace: optionalBoolean(body, "replace"),
+      confirmReplace: optionalBoolean(body, "confirm"),
     });
     return NextResponse.json(result);
   } catch (error) {

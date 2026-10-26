@@ -7,7 +7,7 @@ export type DevotionalStatus =
 /** Korábbi verzió pillanatkép (újragenerálás / AI finomítás backup) */
 export interface DevotionalVersionSnapshot {
   savedAt: string;
-  reason: "regenerate" | "manual_backup" | "ai_iteration";
+  reason: "regenerate" | "manual_backup" | "ai_iteration" | "weekly_replacement";
   /** AI finomítás: admin instrukció */
   instruction?: string;
   title: string;

@@ -12,6 +12,7 @@ import type { EditableDevotionalFields } from "@/lib/devotional-fields";
 import { formatDevotionalForFacebook, getPublicDevotionalUrl } from "@/lib/facebook";
 import type { Devotional } from "@/lib/types";
 import { DAY_LABEL_HU, type DayView } from "@/lib/weekly-plan/ui-logic";
+import { ReplacementControls } from "./ReplacementControls";
 import {
   fetchDevotional,
   generateDay,
@@ -197,6 +198,12 @@ export function DayReviewCard({ view, week, today, busy, onChanged, onToast }: D
           )}
         </div>
       </header>
+
+      {(view.canPrepareReplacement || view.canExecuteReplacement || view.canRestoreReplacement) && (
+        <div className="px-5 pb-4 md:px-6">
+          <ReplacementControls view={view} week={week} busy={busy || working !== null} onChanged={onChanged} onToast={onToast} />
+        </div>
+      )}
 
       {error && (
         <div className="px-5 pb-4 md:px-6">

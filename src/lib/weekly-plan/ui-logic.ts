@@ -1,4 +1,4 @@
-import type { PlanIssues, WeeklyPlan, WeeklyPlanDay } from "./types";
+import type { DayReplacement, PlanIssues, WeeklyPlan, WeeklyPlanDay } from "./types";
 
 /**
  * A heti áhítatműhely kliens-oldali döntési logikája: tiszta függvények, hogy
@@ -77,6 +77,11 @@ export interface DayView {
   locked: boolean;
   /** A kész szöveg szerkeszthető (nem zárolt, van rekord, nem idegen forrás). */
   editable: boolean;
+  /** Másik forrásból származó áhítat kiváltása (csere) — az egyes lépések engedélyezettsége. */
+  replacement: DayReplacement | undefined;
+  canPrepareReplacement: boolean;
+  canExecuteReplacement: boolean;
+  canRestoreReplacement: boolean;
 }
 
 function isLiveGenerating(day: WeeklyPlanDay, now: Date): boolean {
@@ -104,16 +109,26 @@ export function describeDay(
     canApprove: false,
     locked: false,
     editable: false,
+    replacement: planDay.replacement,
+    canPrepareReplacement: false,
+    canExecuteReplacement: false,
+    canRestoreReplacement: Boolean(planDay.replacement?.executedAt) && summary?.weekId === weekId,
     ...extra,
   });
 
-  if (summary && summary.weekId !== weekId) {
-    return view("foreign", {
-      blockedReason: "Ezen a napon már van egy másik forrásból (napi folyamat) származó áhítat.",
-    });
-  }
   if (isLiveGenerating(planDay, now)) {
-    return view("generating", { blockedReason: "A szöveg még készül." });
+    return view("generating", { blockedReason: "A szöveg még készül.", canRestoreReplacement: false });
+  }
+  if (summary && summary.weekId !== weekId) {
+    const prepared = Boolean(planDay.replacement && !planDay.replacement.executedAt);
+    return view("foreign", {
+      blockedReason:
+        planDay.state === "failed" && planDay.error
+          ? `A csere generálása sikertelen volt: ${planDay.error}`
+          : "Ezen a napon már van egy másik forrásból (napi folyamat) származó áhítat.",
+      canPrepareReplacement: !prepared,
+      canExecuteReplacement: prepared,
+    });
   }
   if (planDay.state === "generating") {
     return view("interrupted", {
@@ -174,6 +189,8 @@ export interface GenerationProgress {
   failed: number;
   generating: number;
   remaining: number;
+  /** Másik forrásból származó (kiváltásra váró) napok — a sor nem érinti őket. */
+  foreign: number;
 }
 
 export function generationProgress(views: DayView[]): GenerationProgress {
@@ -186,6 +203,7 @@ export function generationProgress(views: DayView[]): GenerationProgress {
     failed: views.filter((v) => v.label === "failed" || v.label === "interrupted").length,
     generating: views.filter((v) => v.label === "generating").length,
     remaining: views.filter((v) => v.needsGeneration).length,
+    foreign: views.filter((v) => v.label === "foreign").length,
   };
 }
 

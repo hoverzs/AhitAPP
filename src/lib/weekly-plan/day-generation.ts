@@ -17,6 +17,7 @@ import {
   DayBusyError,
   DayConflictError,
   DayIncompleteError,
+  ReplacementStaleError,
   WeeklyPlanInputError,
   WeeklyPlanLockedError,
 } from "./errors";
@@ -121,7 +122,16 @@ export interface GenerateDayResult {
  * már elkészült szövegek érintetlenek. Hiányos szöveget nem ment.
  */
 export async function generateWeekDay(
-  params: { weekId: string; date: string; force?: boolean; today?: string; now?: () => Date },
+  params: {
+    weekId: string;
+    date: string;
+    force?: boolean;
+    /** A másik forrásból (napi folyamat) származó, előkészített áhítat kiváltása — kifejezett megerősítéssel. */
+    replace?: boolean;
+    confirmReplace?: boolean;
+    today?: string;
+    now?: () => Date;
+  },
   store?: WeeklyPlanStore
 ): Promise<GenerateDayResult> {
   const s = storeOf(store);
@@ -141,11 +151,25 @@ export async function generateWeekDay(
   if (day.state === "ready" && !force) throw new DayAlreadyReadyError(day.date);
 
   const existing = await getDevotionalByDate(day.date);
-  if (existing && existing.weekId !== params.weekId) {
+  const replace = params.replace === true;
+  if (replace) {
+    // Biztonságos csere: csak előkészített (mentett), még nem végrehajtott cseréhez, a régi rekord változatlansága esetén.
+    if (params.confirmReplace !== true) {
+      throw new WeeklyPlanInputError("A csere végrehajtásához kifejezett megerősítés kell (confirm).");
+    }
+    if (!existing || existing.weekId === params.weekId) {
+      throw new WeeklyPlanInputError("Ezen a napon nincs lecserélendő, másik forrásból származó áhítat.");
+    }
+    const rep = day.replacement;
+    if (!rep || rep.executedAt) {
+      throw new WeeklyPlanInputError("Előbb készíts biztonsági mentést (csere előkészítése).");
+    }
+    if (existing.updatedAt !== rep.recordUpdatedAt) throw new ReplacementStaleError(day.date);
+  } else if (existing && existing.weekId !== params.weekId) {
     throw new DayConflictError(day.date, existing.status ?? "published");
   }
   // Jóváhagyott / közzétett áhítatot nem írunk újra: előbb vissza kell vonni a jóváhagyást.
-  if (existing && (existing.status === "approved" || existing.status === "published")) {
+  if (!replace && existing && (existing.status === "approved" || existing.status === "published")) {
     throw new WeeklyPlanLockedError(
       `A(z) ${day.date} áhítat jóváhagyott — az újragenerálás előtt vond vissza a jóváhagyást.`
     );
@@ -153,7 +177,7 @@ export async function generateWeekDay(
 
   // Egy korábbi, félbeszakadt futásból már megvan a teljes szöveg: nem hívjuk újra a Geminit.
   // (Elavult nap — a terv megváltozott a szöveg óta — nem egyeztethető: újra kell generálni.)
-  if (existing && !force && day.state !== "stale" && isCompleteRecord(existing)) {
+  if (!replace && existing && !force && day.state !== "stale" && isCompleteRecord(existing)) {
     const updated = await setDayState(s, params.weekId, day.date, (d) => ({
       ...d,
       state: "ready",
@@ -183,14 +207,18 @@ export async function generateWeekDay(
     const planned = await generatePlannedDay(plan, day);
     if (planned.textComplete !== true) throw new DayIncompleteError(day.date);
 
-    const regenerate = Boolean(existing); // azonos hétből származó (hiányos vagy kényszerített) rekord cseréje
+    const regenerate = Boolean(existing); // azonos hétből származó (hiányos vagy kényszerített) rekord, vagy kiváltott régi áhítat cseréje
     const devotional = await buildDevotionalFromPlan(
       planned,
-      regenerate
+      regenerate && !replace
         ? { action: "update", date: day.date, existing }
         : { action: "create", date: day.date },
       regenerate
-        ? { existing, versionHistory: appendVersionSnapshot(existing!, "regenerate") }
+        ? {
+            // Csere: új kép készül a friss szöveghez; a régi szöveg a verziótörténetben és a mentésben marad.
+            ...(replace ? {} : { existing }),
+            versionHistory: appendVersionSnapshot(existing!, replace ? "weekly_replacement" : "regenerate"),
+          }
         : undefined
     );
     devotional.date = day.date;
@@ -200,13 +228,15 @@ export async function generateWeekDay(
     devotional.lastApiError = undefined;
 
     const saved = regenerate
-      ? await upsertDevotional(devotional, { weeklyFlow: true })
+      ? await upsertDevotional(devotional, { weeklyFlow: true, keepReplacedImage: replace })
       : await appendDevotional(devotional);
     const updated = await setDayState(s, params.weekId, day.date, (d) => ({
       ...d,
       state: "ready",
       error: undefined,
       lastAttemptAt: now().toISOString(),
+      replacement:
+        replace && d.replacement ? { ...d.replacement, executedAt: now().toISOString() } : d.replacement,
     }));
     return { plan: updated, devotional: saved, reconciled: false, regenerated: regenerate };
   } catch (error) {

@@ -60,7 +60,7 @@ export class DayAlreadyReadyError extends Error {
 export class DayConflictError extends Error {
   constructor(date: string, status: string) {
     super(
-      `A(z) ${date} napon már van egy másik (nem ebből a heti tervből származó) áhítat (${status}). A felülírását nem engedjük — előbb rendezd kézzel.`
+      `A(z) ${date} napon már van egy másik (nem ebből a heti tervből származó) áhítat (${status}). Közvetlenül nem írjuk felül. Biztonságos kiváltásához használd a „Csere előkészítése” műveletet (teljes mentés, visszaállítható).`
     );
     this.name = "DayConflictError";
   }
@@ -106,5 +106,15 @@ export class WeeklyRecordProtectedError extends Error {
             : `A(z) ${date} áhítat heti azonosítója nem módosítható.`
     );
     this.name = "WeeklyRecordProtectedError";
+  }
+}
+
+/** A lecserélendő régi áhítat a biztonsági mentés óta módosult: új mentés kell. */
+export class ReplacementStaleError extends Error {
+  constructor(date: string) {
+    super(
+      `A(z) ${date} régi áhítat a biztonsági mentés óta módosult. Készíts új mentést (csere előkészítése), hogy a pontos jelenlegi szöveg legyen visszaállítható.`
+    );
+    this.name = "ReplacementStaleError";
   }
 }

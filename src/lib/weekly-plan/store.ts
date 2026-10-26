@@ -162,20 +162,30 @@ export function createWeeklyPlanStore(
 
 let cachedStore: { driver: string; client: JsonBlobClient; store: WeeklyPlanStore } | null = null;
 
+/** A heti terv és a mentések közös tárolókliense (Blob vagy helyi fájlrendszer). */
+export function getWeeklyJsonClient(): JsonBlobClient {
+  const driver = resolveStorageDriver();
+  if (driver === "blob") return getDataBlobClient();
+  if (driver === "local") return localClient();
+  throw new WeeklyPlanUnsupportedError();
+}
+
+let cachedLocalClient: { dir: string; client: JsonBlobClient } | null = null;
+function localClient(): JsonBlobClient {
+  const dir = path.join(getLocalDataDir(), "weekly");
+  if (!cachedLocalClient || cachedLocalClient.dir !== dir) {
+    cachedLocalClient = { dir, client: createLocalJsonClient(dir) };
+  }
+  return cachedLocalClient.client;
+}
+
 /**
  * A heti terv tára az aktív meghajtóhoz: Blob (éles) vagy fájlrendszer (local).
  * A Redis meghajtón nem érhető el — az amúgy is kivezetés alatt áll.
  */
 export function getWeeklyPlanStore(): WeeklyPlanStore {
   const driver = resolveStorageDriver();
-  let client: JsonBlobClient;
-  if (driver === "blob") {
-    client = getDataBlobClient();
-  } else if (driver === "local") {
-    client = createLocalJsonClient(path.join(getLocalDataDir(), "weekly"));
-  } else {
-    throw new WeeklyPlanUnsupportedError();
-  }
+  const client = getWeeklyJsonClient();
   if (cachedStore && cachedStore.driver === driver && cachedStore.client === client) {
     return cachedStore.store;
   }

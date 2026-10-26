@@ -174,3 +174,51 @@ test("a terv-lépés a jóváhagyás után kimondja: a hét még nem publikálá
   assert.match(html, /Terv jóváhagyva/);
   assert.match(html, /még nem publikálásra kész/);
 });
+
+test("csere-vezérlők: az állapotnak megfelelő gomb és szöveg látszik", async () => {
+  const { ReplacementControls } = await import("../src/components/admin/workshop/ReplacementControls");
+  const render = (view: ReturnType<typeof describeWeek>[number]) =>
+    renderToStaticMarkup(
+      React.createElement(ReplacementControls, {
+        view,
+        week: WEEK,
+        busy: false,
+        onChanged: noop,
+        onToast: () => undefined,
+      })
+    );
+  const now = new Date("2026-10-27T12:00:00Z");
+  const foreign = { status: "published", title: "A Szív Kincsei", weekId: undefined };
+  const replacement = {
+    backupId: "b1",
+    backupPath: "backups/x/b1.json",
+    previousStatus: "published",
+    previousTitle: "A Szív Kincsei",
+    recordUpdatedAt: "x",
+    preparedAt: "2026-10-26T08:00:00.000Z",
+  };
+
+  const p1 = plan([]);
+  const prep = describeWeek(overview(p1, [foreign]), now)[0];
+  const prepHtml = render(prep);
+  assert.match(prepHtml, /Csere előkészítése/);
+  assert.match(prepHtml, /az áhítat élő marad/);
+  assert.equal(/Csere végrehajtása/.test(prepHtml), false);
+
+  const p2 = plan([]);
+  p2.days[0].replacement = replacement;
+  const exec = describeWeek(overview(p2, [foreign]), now)[0];
+  const execHtml = render(exec);
+  assert.match(execHtml, /Csere végrehajtása/);
+  assert.match(execHtml, /még <strong>élő<\/strong>/);
+  assert.equal(/Csere előkészítése/.test(execHtml), false);
+
+  const p3 = plan(["ready"]);
+  p3.days[0].replacement = { ...replacement, executedAt: "2026-10-26T09:00:00.000Z" };
+  const restore = describeWeek(overview(p3, [{ status: "needs_review", title: "Új", weekId: WEEK }]), now)[0];
+  assert.match(render(restore), /Régi áhítat visszaállítása/);
+
+  // sima nap: nincs vezérlő
+  const normal = describeWeek(overview(plan(["ready"]), [{ status: "needs_review", title: "A", weekId: WEEK }]), now)[0];
+  assert.equal(render(normal), "");
+});

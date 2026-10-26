@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAppTodayIso, isValidIsoDate } from "@/lib/app-date";
 import { setWeekDevotionalApproval } from "@/lib/weekly-plan/day-generation";
+import { prepareReplacement, restoreReplaced } from "@/lib/weekly-plan/replacement";
 import { WeeklyPlanInputError } from "@/lib/weekly-plan/errors";
 import {
   BRIEF_FORMAT_EXAMPLE,
   loadDaySummaries,
+  optionalBoolean,
   optionalDateList,
   optionalString,
   readJsonObject,
@@ -21,6 +23,7 @@ import {
   importPlan,
   patchPlan,
   proposePlan,
+  readEffectiveRegistry,
   reopenPlan,
   revisePlan,
   type DayPatch,
@@ -46,7 +49,7 @@ export async function GET(request: NextRequest) {
     const store = getWeeklyPlanStore();
     const [plan, registry, days] = await Promise.all([
       store.getPlan(weekId),
-      store.getRegistry(),
+      readEffectiveRegistry(store),
       loadDaySummaries(weekId),
     ]);
 
@@ -166,6 +169,20 @@ export async function POST(request: NextRequest) {
           expectedUpdatedAt: requiredString(body, "expectedUpdatedAt"),
         });
         return NextResponse.json({ deleted: true });
+
+      case "prepare_replacement": {
+        const date = requiredString(body, "date");
+        if (!isValidIsoDate(date)) throw new WeeklyPlanInputError("A date mező érvénytelen dátum.");
+        return NextResponse.json(await prepareReplacement({ weekId, date }));
+      }
+
+      case "restore_replaced": {
+        const date = requiredString(body, "date");
+        if (!isValidIsoDate(date)) throw new WeeklyPlanInputError("A date mező érvénytelen dátum.");
+        return NextResponse.json(
+          await restoreReplaced({ weekId, date, confirm: optionalBoolean(body, "confirm") })
+        );
+      }
 
       case "approve_days":
       case "unapprove_days":

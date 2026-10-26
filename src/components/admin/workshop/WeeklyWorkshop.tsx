@@ -264,7 +264,7 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
           <AdminErrorAlert
             variant="warning"
             title="Napi folyamatból származó áhítat a héten"
-            message={`${foreign.map((f) => f.date).join(", ")} — ezeken a napokon már van másik forrásból (napi generálás) készült áhítat. A heti műhely ezt nem írja felül, és nem is generál rá.`}
+            message={`${foreign.map((f) => f.date).join(", ")} — ezeken a napokon már van másik forrásból (napi generálás) készült áhítat. A heti műhely ezt közvetlenül nem írja felül; biztonságos kiváltásához a napi sorban a „Csere előkészítése” (teljes mentés) művelet szolgál.`}
           />
         )}
 

@@ -275,6 +275,8 @@ export async function appendDevotional(entry: Devotional): Promise<Devotional> {
  */
 export interface DevotionalWriteOptions {
   weeklyFlow?: boolean;
+  /** A lecserélt rekord (saját feltöltésű) képét ne töröljük — a régi változat visszaállíthatósága miatt. */
+  keepReplacedImage?: boolean;
 }
 
 export function assertWeeklyWriteAllowed(
@@ -312,7 +314,7 @@ export async function upsertDevotional(
       options
     );
     const saved = await storage.updateDevotional(devotionalDateKey(existing), normalized);
-    await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
+    if (!options?.keepReplacedImage) await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
     return saved;
   }
 

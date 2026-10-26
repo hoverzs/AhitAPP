@@ -1,5 +1,8 @@
 import { addDaysToIsoDate, getAppTodayIso } from "../app-date";
 import { limitImageKeywords } from "../planned-day-mapper";
+import { getDevotionalStorage } from "../storage";
+import { extractVerseReference } from "../devotional-memory";
+import { pruneRegistry } from "./registry";
 import {
   WeeklyPlanConflictError,
   WeeklyPlanInputError,
@@ -50,6 +53,47 @@ export interface PlanOperationResult {
 }
 
 // ── közös segédek ───────────────────────────────────────────────────────────
+
+/**
+ * A heti nyilvántartás + a napi folyamat korábbi előzménye (meta: az utolsó
+ * napok igehelyei és a törölt napok használt igehelyei). Így a heti tervező
+ * a napi folyamatban már használt igéket sem ismétli. A dátum nélküli
+ * (régi) igehelyek a 90 napos ablak szélére kerülnek, hogy ne essenek egy
+ * terv hetébe (és ne rejtsenek el ütközést).
+ */
+export async function readEffectiveRegistry(
+  store: WeeklyPlanStore,
+  today: string = getAppTodayIso()
+): Promise<PlanRegistry> {
+  const registry = await store.getRegistry();
+  let meta: Awaited<ReturnType<NonNullable<ReturnType<typeof getDevotionalStorage>["getMeta"]>>> | null = null;
+  try {
+    meta = (await getDevotionalStorage().getMeta?.()) ?? null;
+  } catch (error) {
+    console.warn("[weekly-plan] a napi előzmény (meta) olvasása sikertelen:", error);
+  }
+  if (!meta) return registry;
+
+  const entries = [...registry.entries];
+  const seen = new Set(entries.map((e) => `${e.date}|${e.reference.toLowerCase()}`));
+  const covered = new Set<string>();
+  for (const d of meta.recentDays ?? []) {
+    covered.add(d.verseReference.toLowerCase());
+    const key = `${d.date}|${d.verseReference.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ date: d.date, reference: d.verseReference, title: d.title, category: d.category });
+  }
+  const edge = addDaysToIsoDate(today, -89);
+  for (const ref of meta.usedVerseReferences ?? []) {
+    if (covered.has(ref.toLowerCase())) continue;
+    const key = `${edge}|${ref.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({ date: edge, reference: extractVerseReference(ref), title: "(korábbi napi áhítat)" });
+  }
+  return pruneRegistry({ version: 1, entries }, today);
+}
 
 function storeOf(store?: WeeklyPlanStore): WeeklyPlanStore {
   return store ?? getWeeklyPlanStore();
@@ -168,7 +212,7 @@ async function describe(
   plan: WeeklyPlan,
   extra: Partial<PlanOperationResult> = {}
 ): Promise<PlanOperationResult> {
-  const registry = await store.getRegistry();
+  const registry = await readEffectiveRegistry(store);
   return { plan, issues: planApprovalIssues(plan, registry), staleDates: [], ...extra };
 }
 
@@ -229,7 +273,7 @@ export async function proposePlan(
 
   const existing = await s.getPlan(params.weekId);
   assertReplaceable(existing);
-  const registry = await s.getRegistry();
+  const registry = await readEffectiveRegistry(s);
 
   let draft = await requestPlanDraft(
     buildProposeUserPrompt({ weekId: params.weekId, theme, brief, registry }),
@@ -283,7 +327,7 @@ export async function revisePlan(
   assertDraftPlan(current, "finomítható");
   assertFresh(current, params.expectedUpdatedAt);
 
-  const registry = await s.getRegistry();
+  const registry = await readEffectiveRegistry(s);
   let draft = await requestPlanDraft(
     buildRevisePromptUser({ plan: current, instruction, registry }),
     "revise"
@@ -467,7 +511,7 @@ export async function approvePlan(
     }
   }
 
-  const registry = await s.getRegistry();
+  const registry = await readEffectiveRegistry(s);
   const candidate: WeeklyPlan = { ...current, repeatOverrides: overrides };
   const issues = planApprovalIssues(candidate, registry);
   if (issues.errors.length > 0) throw new WeeklyPlanNotApprovableError(issues);
