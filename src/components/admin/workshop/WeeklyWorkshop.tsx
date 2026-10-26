@@ -16,11 +16,13 @@ import {
   missingPublicDays,
   suggestedStep,
   weekApprovalState,
+  weekReadiness,
   type StepId,
   type WeekOverview,
 } from "@/lib/weekly-plan/ui-logic";
 import { GenerateStep } from "./GenerateStep";
 import { PlanStep } from "./PlanStep";
+import { WeekReadinessBanner } from "./WeekReadinessBanner";
 import { ReviewStep } from "./ReviewStep";
 import { fetchOverview, WorkshopApiError } from "./workshop-api";
 
@@ -107,6 +109,10 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
     [overview, views]
   );
   const foreign = useMemo(() => foreignDays(views), [views]);
+  const readiness = useMemo(
+    () => (overview ? weekReadiness(overview.plan, views, overview.today) : null),
+    [overview, views]
+  );
 
   function chooseStep(next: StepId) {
     stepChosenByUser.current = true;
@@ -242,6 +248,8 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
             </button>
           ))}
         </nav>
+
+        {readiness && overview?.plan && <WeekReadinessBanner readiness={readiness} />}
 
         {missing.length > 0 && (
           <AdminErrorAlert

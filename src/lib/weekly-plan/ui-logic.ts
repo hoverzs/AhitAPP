@@ -275,3 +275,90 @@ export function missingPublicDays(plan: WeeklyPlan | null, views: DayView[], tod
 export function foreignDays(views: DayView[]): DayView[] {
   return views.filter((v) => v.label === "foreign");
 }
+
+export type ReadinessStage =
+  | "no-plan"
+  | "plan-draft"
+  | "plan-approved"
+  | "texts-ready"
+  | "ready-to-publish";
+
+export interface WeekReadiness {
+  stage: ReadinessStage;
+  /** Rövid állapotcím — a terv jóváhagyása és a hét publikálásra készsége külön szerepel. */
+  label: string;
+  detail: string;
+  planApproved: boolean;
+  /** Elkészült (nem hiányos, nem elavult) szövegű napok. */
+  textsReady: number;
+  approvedDays: number;
+  total: number;
+  /** Mind a 7 nap szövege jóváhagyott: a hét publikálásra kész (a napok a saját napjukon jelennek meg). */
+  publishReady: boolean;
+  /** A publikálásra kész hét napjai közül ma már nyilvános / a saját napján megjelenő napok. */
+  publicNow: number;
+  scheduled: number;
+}
+
+/**
+ * A heti TERV jóváhagyása és a hét PUBLIKÁLÁSRA KÉSZ állapota külön fogalom:
+ * a terv jóváhagyása csak a generálás előfeltétele, nem jelenti, hogy a hét
+ * áhítatai elkészültek vagy jóváhagyottak.
+ */
+export function weekReadiness(plan: WeeklyPlan | null, views: DayView[], today: string): WeekReadiness {
+  const total = views.length || 7;
+  const base = {
+    planApproved: plan?.status === "approved",
+    textsReady: views.filter((v) => ["review", "approved", "published"].includes(v.label)).length,
+    approvedDays: views.filter((v) => v.locked).length,
+    total,
+    publishReady: false,
+    publicNow: 0,
+    scheduled: 0,
+  };
+
+  if (!plan) {
+    return { ...base, stage: "no-plan", label: "Nincs heti terv", detail: "Készíts vagy importálj tervet a hétre." };
+  }
+  if (plan.status !== "approved") {
+    return {
+      ...base,
+      stage: "plan-draft",
+      label: "A terv még vázlat",
+      detail: "Hagyd jóvá a tervet — ez a napi szövegek generálásának előfeltétele.",
+    };
+  }
+
+  const allApproved = views.length > 0 && base.approvedDays === views.length;
+  if (allApproved) {
+    const publicNow = views.filter((v) => v.date <= today).length;
+    return {
+      ...base,
+      stage: "ready-to-publish",
+      label: "A hét publikálásra kész",
+      detail:
+        publicNow === views.length
+          ? "Mind a 7 áhítat jóváhagyott és nyilvános."
+          : `Mind a 7 áhítat jóváhagyott: ${publicNow} már nyilvános, ${views.length - publicNow} a saját napján jelenik meg automatikusan.`,
+      publishReady: true,
+      publicNow,
+      scheduled: views.length - publicNow,
+    };
+  }
+
+  const broken = views.filter((v) => v.needsGeneration || v.label === "incomplete" || v.label === "generating" || v.label === "foreign").length;
+  if (broken === 0 && base.textsReady === views.length) {
+    return {
+      ...base,
+      stage: "texts-ready",
+      label: "A szövegek kész — jóváhagyásra várnak",
+      detail: `${base.approvedDays}/${views.length} áhítat jóváhagyva; a hét még nem publikálásra kész.`,
+    };
+  }
+  return {
+    ...base,
+    stage: "plan-approved",
+    label: "A terv jóváhagyva — a hét még nem publikálásra kész",
+    detail: `${base.textsReady}/${views.length} szöveg kész, ${base.approvedDays}/${views.length} áhítat jóváhagyva. A terv jóváhagyása csak a generálás előfeltétele.`,
+  };
+}

@@ -92,7 +92,7 @@ export function ReviewStep({ week, overview, views, onChanged, onToast, onGoGene
         )}
         {approval.allApproved && (
           <p className="mt-4 text-sm text-emerald-800">
-            Mind a 7 nap jóváhagyva. Mindegyik a saját napján automatikusan megjelenik.
+            A hét publikálásra kész: mind a 7 áhítat jóváhagyva. Mindegyik a saját napján automatikusan megjelenik.
           </p>
         )}
         {error && (

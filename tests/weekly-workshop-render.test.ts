@@ -133,3 +133,44 @@ test("ellenőrző lépés: a teljes hét jóváhagyása letiltott, ha van blokko
   assert.match(button, /disabled/);
   assert.match(html, /nem készek/);
 });
+
+test("heti állapotsor: a terv jóváhagyása külön szerepel a publikálásra kész állapottól", async () => {
+  const { WeekReadinessBanner } = await import("../src/components/admin/workshop/WeekReadinessBanner");
+  const { weekReadiness } = await import("../src/lib/weekly-plan/ui-logic");
+
+  const approvedOnly = plan([]);
+  const ov = overview(approvedOnly, []);
+  const views = describeWeek(ov, new Date("2026-10-27T12:00:00Z"));
+  const html = renderToStaticMarkup(
+    React.createElement(WeekReadinessBanner, { readiness: weekReadiness(approvedOnly, views, "2026-10-27") })
+  );
+  assert.match(html, /data-stage="plan-approved"/);
+  assert.match(html, /még nem publikálásra kész/);
+  assert.match(html, /Terv: jóváhagyva/);
+  assert.match(html, /Szövegek: 0\/7 kész/);
+  assert.match(html, /Jóváhagyott áhítat: 0\/7/);
+
+  const ready = plan(Array(7).fill("ready"));
+  const records = Array(7).fill({ status: "approved", title: "A", weekId: WEEK });
+  const doneViews = describeWeek(overview(ready, records), new Date("2026-10-27T12:00:00Z"));
+  const doneHtml = renderToStaticMarkup(
+    React.createElement(WeekReadinessBanner, { readiness: weekReadiness(ready, doneViews, "2026-10-27") })
+  );
+  assert.match(doneHtml, /data-stage="ready-to-publish"/);
+  assert.match(doneHtml, /A hét publikálásra kész/);
+});
+
+test("a terv-lépés a jóváhagyás után kimondja: a hét még nem publikálásra kész", async () => {
+  const { PlanStep } = await import("../src/components/admin/workshop/PlanStep");
+  const html = renderToStaticMarkup(
+    React.createElement(PlanStep, {
+      week: WEEK,
+      overview: overview(plan([]), []),
+      onChanged: noop,
+      onToast: () => undefined,
+      onNext: () => undefined,
+    })
+  );
+  assert.match(html, /Terv jóváhagyva/);
+  assert.match(html, /még nem publikálásra kész/);
+});

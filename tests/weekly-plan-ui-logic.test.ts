@@ -12,6 +12,7 @@ import {
   shouldStopQueue,
   suggestedStep,
   weekApprovalState,
+  weekReadiness,
   type DaySummary,
   type WeekOverview,
 } from "../src/lib/weekly-plan/ui-logic";
@@ -254,4 +255,51 @@ test("idegen forrású nap jelzése a héten", () => {
     NOW
   );
   assert.deepEqual(foreignDays(views).map((v) => v.date), [p.days[0].date]);
+});
+
+test("heti állapot: a terv jóváhagyása és a publikálásra kész hét külön állapot", () => {
+  const TODAY = "2026-10-27";
+  const stage = (p: WeeklyPlan | null, records: (DaySummary["devotional"])[]) =>
+    weekReadiness(p, p ? describeWeek(overview(p, records), NOW) : [], TODAY);
+
+  assert.equal(stage(null, []).stage, "no-plan");
+  assert.equal(stage(plan([], { status: "draft" }), []).stage, "plan-draft");
+
+  // Terv jóváhagyva, de még nincs szöveg: NEM publikálásra kész.
+  const approvedNoTexts = stage(plan(), []);
+  assert.equal(approvedNoTexts.stage, "plan-approved");
+  assert.equal(approvedNoTexts.planApproved, true);
+  assert.equal(approvedNoTexts.publishReady, false);
+  assert.match(approvedNoTexts.label, /még nem publikálásra kész/);
+
+  const ready = plan(Array.from({ length: 7 }, () => ({ state: "ready" as const })));
+  const review = Array(7).fill(summary("needs_review"));
+
+  // Mind a 7 szöveg kész, de jóváhagyásra vár: még mindig nem publikálásra kész.
+  const textsReady = stage(ready, review);
+  assert.equal(textsReady.stage, "texts-ready");
+  assert.equal(textsReady.publishReady, false);
+  assert.equal(textsReady.textsReady, 7);
+  assert.equal(textsReady.approvedDays, 0);
+
+  // Néhány jóváhagyott nap sem elég.
+  const partial = stage(ready, [summary("approved"), summary("approved"), ...Array(5).fill(summary("needs_review"))]);
+  assert.equal(partial.publishReady, false);
+  assert.equal(partial.approvedDays, 2);
+
+  // Hiányos nap miatt a szövegek nem „kész” állapotúak.
+  const incomplete = [...review];
+  incomplete[3] = summary("needs_review", { lastApiError: "csonka" });
+  assert.equal(stage(ready, incomplete).stage, "plan-approved");
+
+  // Elavult nap: nem kész.
+  const staleStates = ready.days.map((d, i) => ({ ...d, state: i === 2 ? ("stale" as const) : d.state }));
+  assert.equal(stage({ ...ready, days: staleStates }, review).stage, "plan-approved");
+
+  // Mind a 7 jóváhagyott: publikálásra kész, a mai és a jövőbeli napok szétválasztva.
+  const done = stage(ready, Array(7).fill(summary("approved")));
+  assert.equal(done.stage, "ready-to-publish");
+  assert.equal(done.publishReady, true);
+  assert.equal(done.publicNow, 2, "10-26 és 10-27 már elérkezett");
+  assert.equal(done.scheduled, 5);
 });

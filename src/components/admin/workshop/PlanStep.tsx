@@ -382,7 +382,7 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
           expectedUpdatedAt: plan.updatedAt,
           overrideRepeats: [...overrides],
         }),
-      () => onToast("A terv jóváhagyva. Jöhet az áhítatok generálása.")
+      () => onToast("A terv jóváhagyva — a napi áhítatok még nem készültek el, jöhet a generálás.")
     );
 
   const reopen = () =>
@@ -413,7 +413,7 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
           isDraft ? (
             <span className="admin-chip">Vázlat</span>
           ) : (
-            <span className="admin-chip admin-chip-success">Jóváhagyva</span>
+            <span className="admin-chip admin-chip-success">Terv jóváhagyva</span>
           )
         }
       >
@@ -612,8 +612,10 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
               </div>
             ) : (
               <p className="mb-4 text-sm text-ink-muted">
-                Ellenőrizd a témát, az ívet és a hét igehelyeit. Jóváhagyás után a napok szövege
-                generálható; az igehelyek bekerülnek a 90 napos nyilvántartásba.
+                Ellenőrizd a témát, az ívet és a hét igehelyeit. A terv jóváhagyása a napi szövegek
+                generálásának előfeltétele; az igehelyek bekerülnek a 90 napos nyilvántartásba.
+                <strong> Nem jelenti</strong>, hogy az áhítatok elkészültek vagy publikálásra készek — azokat
+                külön kell legenerálni és jóváhagyni.
               </p>
             )}
             <div className="flex flex-wrap items-center gap-3">
@@ -629,6 +631,10 @@ export function PlanStep({ week, overview, onChanged, onToast, onNext }: PlanSte
           </>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
+            <p className="basis-full text-sm text-ink-muted">
+              A terv jóváhagyva. A hét <strong>még nem publikálásra kész</strong>: a napi áhítatokat
+              le kell generálni, majd egyenként vagy együtt jóvá kell hagyni.
+            </p>
             <AdminButton variant="primary" onClick={onNext}>
               Tovább az áhítatok generálásához →
             </AdminButton>
