@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { getAppTodayIso } from "./app-date";
 import { filterPublicDevotionals, normalizeDevotional } from "./devotional-status";
+import { WeeklyRecordProtectedError } from "./weekly-plan/errors";
 import { getPublicWindowDates, isDateInPublicWindow } from "./public-window";
 import { PUBLIC_DEVOTIONALS_CACHE_TAG } from "./storage/cache-tags";
 import { isHeroImageUrl } from "./image-assets";
@@ -264,12 +265,52 @@ export async function appendDevotional(entry: Devotional): Promise<Devotional> {
   return storage.saveDevotional(normalizeDevotional(entry));
 }
 
-export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
+/**
+ * Írási átjáró a heti sorozat áhítataihoz. A heti műhely folyamata
+ * (`weeklyFlow`) szabadon írhat; minden más hívó (régi admin API, napi
+ * generálás, finomítás) csak a védelem szabályai szerint:
+ *  - jóváhagyott / közzétett heti áhítatot semmi nem módosíthat (csak olvasható);
+ *  - a heti áhítat státusza (jóváhagyás, közzététel, visszavonás) nem változhat;
+ *  - a heti azonosító nem módosítható.
+ */
+export interface DevotionalWriteOptions {
+  weeklyFlow?: boolean;
+}
+
+export function assertWeeklyWriteAllowed(
+  existing: Devotional,
+  next: { status?: DevotionalStatus; weekId?: string },
+  options?: DevotionalWriteOptions
+): void {
+  if (!existing.weekId || options?.weeklyFlow) return;
+  const date = devotionalDateKey(existing);
+  const status = existing.status ?? "published";
+  if (status === "approved" || status === "published") {
+    throw new WeeklyRecordProtectedError(date, "locked");
+  }
+  if (next.weekId !== undefined && next.weekId !== existing.weekId) {
+    throw new WeeklyRecordProtectedError(date, "weekId");
+  }
+  if (next.status !== undefined && next.status !== status) {
+    throw new WeeklyRecordProtectedError(date, "status");
+  }
+}
+
+export async function upsertDevotional(
+  entry: Devotional,
+  options?: DevotionalWriteOptions
+): Promise<Devotional> {
   const storage = getDevotionalStorage();
   const normalized = normalizeDevotional(entry);
   const existing = await storage.getDevotionalByDate(devotionalDateKey(normalized));
 
   if (existing) {
+    // A heti azonosító nélküli (pl. újragenerált) objektum nem írhatja át a heti rekordot.
+    assertWeeklyWriteAllowed(
+      existing,
+      { status: normalized.status, weekId: normalized.weekId ?? "" },
+      options
+    );
     const saved = await storage.updateDevotional(devotionalDateKey(existing), normalized);
     await cleanupReplacedImage(existing.imageUrl, saved.imageUrl);
     return saved;
@@ -280,7 +321,8 @@ export async function upsertDevotional(entry: Devotional): Promise<Devotional> {
 
 async function patchDevotionalByDate(
   date: string,
-  patch: Partial<Devotional>
+  patch: Partial<Devotional>,
+  options?: DevotionalWriteOptions
 ): Promise<Devotional> {
   const storage = getDevotionalStorage();
   const existing = await storage.getDevotionalByDate(date);
@@ -288,6 +330,7 @@ async function patchDevotionalByDate(
   if (!existing) {
     throw new Error(`A(z) ${date} napi áhítat nem található.`);
   }
+  assertWeeklyWriteAllowed(existing, { status: patch.status, weekId: patch.weekId }, options);
 
   const updated = normalizeDevotional({ ...existing, ...patch });
   const saved = await storage.updateDevotional(date, updated);
@@ -297,10 +340,11 @@ async function patchDevotionalByDate(
 
 export async function updateDevotionalStatus(
   date: string,
-  status: DevotionalStatus
+  status: DevotionalStatus,
+  options?: DevotionalWriteOptions
 ): Promise<Devotional> {
   const now = new Date().toISOString();
-  return patchDevotionalByDate(date, { status, updatedAt: now });
+  return patchDevotionalByDate(date, { status, updatedAt: now }, options);
 }
 
 export async function saveDevotionalAdminEdit(

@@ -7,6 +7,7 @@ import {
   uploadDevotionalImage,
 } from "@/lib/devotional-image-upload";
 import { storageErrorResponse } from "@/lib/storage";
+import { protectionResponse } from "@/lib/weekly-plan/protection-response";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,8 @@ export async function POST(request: Request) {
     }
     const storage = storageErrorResponse(err);
     if (storage) return storage;
+    const protectedResponse = protectionResponse(err);
+    if (protectedResponse) return protectedResponse;
 
     const message = err instanceof Error ? err.message : "Feltöltés sikertelen.";
     return NextResponse.json({ error: message }, { status: 400 });

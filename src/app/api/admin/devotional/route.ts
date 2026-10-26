@@ -21,6 +21,7 @@ import {
 } from "@/lib/devotional-fields";
 import type { DevotionalStatus } from "@/lib/types";
 import { storageErrorResponse } from "@/lib/storage";
+import { protectionResponse } from "@/lib/weekly-plan/protection-response";
 
 export const dynamic = "force-dynamic";
 
@@ -233,6 +234,8 @@ export async function PATCH(request: Request) {
   } catch (err) {
     const storage = storageErrorResponse(err);
     if (storage) return storage;
+    const protectedResponse = protectionResponse(err);
+    if (protectedResponse) return protectedResponse;
 
     const message = err instanceof Error ? err.message : "Művelet sikertelen.";
     return NextResponse.json({ error: message }, { status: 400 });

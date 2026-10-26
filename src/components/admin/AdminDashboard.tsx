@@ -645,12 +645,35 @@ export function AdminDashboard({
           />
         )}
 
-        {context.reviewWarning && (
+        {context.weeklyPlanNotice && (
           <AdminErrorAlert
-            title="Generálás figyelmeztetés"
-            message={context.reviewWarning}
+            variant="warning"
+            title={`A mai napot heti terv kezeli (${context.weeklyPlanNotice.weekId})`}
+            message={
+              context.weeklyPlanNotice.contentGap
+                ? "A napi automatikus generálás kihagyva, a mai áhítat pedig még nincs jóváhagyva a heti műhelyben — az oldalon addig a legutóbbi áhítat látszik. Pótold a heti műhelyben."
+                : "A napi automatikus generálás kihagyva; a mai áhítat a heti műhelyből jelenik meg."
+            }
+            hint="Nyisd meg a heti műhelyt az Admin fejléc „Heti műhely” gombjával."
           />
         )}
+
+        {context.reviewWarnings && context.reviewWarnings.length > 0
+          ? context.reviewWarnings.map((w) => (
+              <AdminErrorAlert
+                key={w.date}
+                title={`Generálás figyelmeztetés — ${w.date}${w.title ? ` „${w.title}”` : ""}`}
+                message={w.message}
+                hint={
+                  w.isToday
+                    ? undefined
+                    : `Ez a(z) ${w.date} napi áhítat hibája, nem a mai áhítaté. A szöveg nem nyilvános, amíg jóvá nem hagyod.`
+                }
+              />
+            ))
+          : context.reviewWarning && (
+              <AdminErrorAlert title="Generálás figyelmeztetés" message={context.reviewWarning} />
+            )}
 
         {context.devReviewMode && (
           <div className="admin-banner-dev">

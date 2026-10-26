@@ -258,3 +258,20 @@ export function suggestedStep(plan: WeeklyPlan | null, views: DayView[]): StepId
   );
   return stillToGenerate ? "generate" : "review";
 }
+
+/**
+ * Jóváhagyott terv napjai, amelyek már elérkeztek (dátum ≤ ma), de még nincs
+ * jóváhagyott áhítatuk. A napi automatikus generálás ezeket kihagyja, ezért
+ * tartalmi hiányt jelentenek — a műhely hangosan jelzi.
+ */
+export function missingPublicDays(plan: WeeklyPlan | null, views: DayView[], today: string): DayView[] {
+  if (!plan || plan.status !== "approved") return [];
+  return views.filter(
+    (v) => v.date <= today && v.label !== "approved" && v.label !== "published" && v.label !== "foreign"
+  );
+}
+
+/** Napok, ahol már van másik (napi folyamatból származó) áhítat — a heti műhely nem írja felül. */
+export function foreignDays(views: DayView[]): DayView[] {
+  return views.filter((v) => v.label === "foreign");
+}

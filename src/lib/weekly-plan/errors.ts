@@ -75,3 +75,36 @@ export class DayIncompleteError extends Error {
     this.name = "DayIncompleteError";
   }
 }
+
+/** A nap egy jóváhagyott heti tervhez tartozik: a napi (régi) folyamat nem generálhat rá. */
+export class ManagedByWeeklyPlanError extends Error {
+  constructor(public readonly date: string, public readonly weekId: string) {
+    super(
+      `A(z) ${date} napot jóváhagyott heti terv kezeli (${weekId}). A napi generálás itt ki van hagyva — használd a heti műhelyt.`
+    );
+    this.name = "ManagedByWeeklyPlanError";
+  }
+}
+
+/**
+ * Heti sorozatból származó áhítat védett: státusza csak a heti műhely
+ * műveleteivel változhat, jóváhagyott állapotban pedig semmilyen szerkesztés
+ * nem engedett — a régi admin API-n át sem.
+ */
+export class WeeklyRecordProtectedError extends Error {
+  constructor(
+    public readonly date: string,
+    public readonly reason: "locked" | "status" | "weekId" | "regenerate"
+  ) {
+    super(
+      reason === "locked"
+        ? `A(z) ${date} áhítat jóváhagyott heti áhítat, ezért csak olvasható. A szerkesztéshez előbb vond vissza a jóváhagyást a heti műhelyben.`
+        : reason === "status"
+          ? `A(z) ${date} áhítat heti sorozat része: a jóváhagyását, közzétételét és visszavonását csak a heti műhely végezheti.`
+          : reason === "regenerate"
+            ? `A(z) ${date} áhítat heti sorozat része: az újragenerálás a heti műhelyből indítható.`
+            : `A(z) ${date} áhítat heti azonosítója nem módosítható.`
+    );
+    this.name = "WeeklyRecordProtectedError";
+  }
+}

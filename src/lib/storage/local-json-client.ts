@@ -83,10 +83,13 @@ export function createLocalJsonClient(rootDir: string): JsonBlobClient {
   }
 
   return {
-    async getText(pathname: string, _options?: BlobGetOptions): Promise<BlobTextResult | null> {
+    getText(pathname: string, _options?: BlobGetOptions): Promise<BlobTextResult | null> {
       void _options;
-      const text = await read(pathname);
-      return text === null ? null : { text, etag: etagOf(text) };
+      // Az olvasás is a sorba kerül: egy félig kiírt fájlt (Windows) soha nem olvasunk.
+      return serialized(async () => {
+        const text = await read(pathname);
+        return text === null ? null : { text, etag: etagOf(text) };
+      });
     },
 
     putText(pathname: string, text: string, options?: BlobPutOptions) {

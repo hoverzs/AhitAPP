@@ -102,12 +102,16 @@ export function DayReviewCard({ view, week, today, busy, onChanged, onToast }: D
           : (r.skipped[0]?.reason ?? "Nem hagyható jóvá.")
     );
 
-  const revoke = () =>
-    act(
+  const revoke = async () => {
+    await act(
       "revoke",
       () => setDevotionalApproval(week, false, [view.date]),
       (r) => (r.changed.length ? "Jóváhagyás visszavonva — szerkeszthető." : (r.skipped[0]?.reason ?? "Nem vonható vissza."))
-    ).then(() => setDevotional(null));
+    );
+    // A kártya adata friss legyen (a státusz és a szerkeszthetőség változott).
+    setDevotional(null);
+    if (open) await load();
+  };
 
   const regenerate = async () => {
     setConfirmRegenerate(false);

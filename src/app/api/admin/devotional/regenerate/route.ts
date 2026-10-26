@@ -14,6 +14,7 @@ import {
 } from "@/lib/generate-devotional";
 import { isDuplicateVerseExhaustedError } from "@/lib/duplicate-verse-retry";
 import { storageErrorResponse } from "@/lib/storage";
+import { protectionResponse } from "@/lib/weekly-plan/protection-response";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -48,6 +49,8 @@ export async function POST(request: Request) {
   } catch (err) {
     const storage = storageErrorResponse(err);
     if (storage) return storage;
+    const protectedResponse = protectionResponse(err);
+    if (protectedResponse) return protectedResponse;
 
     if (err instanceof GenerationBlockedError) {
       return NextResponse.json({ error: err.reason, code: "GENERATION_BLOCKED" }, { status: 409 });

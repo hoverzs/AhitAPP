@@ -16,6 +16,7 @@ import { buildAdminDevotionalContext } from "@/lib/app-data";
 import { readDevotionals, upsertDevotional } from "@/lib/devotionals";
 import { storageErrorResponse } from "@/lib/storage";
 import { getAppTodayIso } from "@/lib/app-date";
+import { protectionResponse } from "@/lib/weekly-plan/protection-response";
 
 export const maxDuration = 300;
 
@@ -46,6 +47,8 @@ export async function POST() {
   } catch (err) {
     const storage = storageErrorResponse(err);
     if (storage) return storage;
+    const protectedResponse = protectionResponse(err);
+    if (protectedResponse) return protectedResponse;
 
     if (isDuplicateVerseExhaustedError(err)) {
       return NextResponse.json(
@@ -77,10 +80,11 @@ export async function POST() {
 
     try {
       const history = await readDevotionals();
-      // Csak a mai nap függő rekordjához írunk hibát — más napé ne változzon.
+      // Csak a mai nap függő, napi folyamatból származó rekordjához írunk hibát — más napé és a heti sorozaté ne változzon.
       const today = getAppTodayIso();
       const pending = history.find(
-        (d) => d.date === today && (d.status === "needs_review" || d.status === "draft")
+        (d) =>
+          d.date === today && !d.weekId && (d.status === "needs_review" || d.status === "draft")
       );
       if (pending) {
         await upsertDevotional({

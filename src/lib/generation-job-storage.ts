@@ -8,6 +8,7 @@ import {
   REDIS_GENERATION_JOB_PREFIX,
 } from "./storage/redis-storage";
 import { getBlobJobStore, resolveStorageDriver } from "./storage";
+import { getLocalDataDir } from "./storage/local-data-dir";
 import {
   normalizeGenerationJob,
   type DailyGenerationJob,
@@ -15,7 +16,7 @@ import {
 
 export { REDIS_GENERATION_JOB_PREFIX };
 
-const LOCAL_JOBS_PATH = path.join(process.cwd(), "data", "generation-jobs.json");
+const LOCAL_JOBS_PATH = path.join(getLocalDataDir(), "generation-jobs.json");
 
 function jobRedisKey(date: string): string {
   return `${REDIS_GENERATION_JOB_PREFIX}${date}`;

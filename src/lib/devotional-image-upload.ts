@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import {
+  assertWeeklyWriteAllowed,
   getDevotionalByDate,
   saveDevotionalManualImage,
 } from "./devotionals";
@@ -71,6 +72,8 @@ export async function uploadDevotionalImage(input: {
   if (!existing) {
     throw new ImageUploadError("Nem található.", 404);
   }
+  // Zárolt heti áhítathoz semmit nem töltünk fel (a tárolóba írás előtt ellenőrzünk).
+  assertWeeklyWriteAllowed(existing, {});
 
   if (resolveStorageDriver() === "blob") {
     const store = getImageStore();

@@ -11,7 +11,9 @@ import { addDaysToIsoDate } from "@/lib/app-date";
 import { getNextWeekStart, getWeekStart } from "@/lib/weekly-plan/types";
 import {
   describeWeek,
+  foreignDays,
   generationProgress,
+  missingPublicDays,
   suggestedStep,
   weekApprovalState,
   type StepId,
@@ -100,6 +102,11 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
   const views = useMemo(() => (overview ? describeWeek(overview) : []), [overview]);
   const progress = useMemo(() => generationProgress(views), [views]);
   const approval = useMemo(() => weekApprovalState(views), [views]);
+  const missing = useMemo(
+    () => (overview ? missingPublicDays(overview.plan, views, overview.today) : []),
+    [overview, views]
+  );
+  const foreign = useMemo(() => foreignDays(views), [views]);
 
   function chooseStep(next: StepId) {
     stepChosenByUser.current = true;
@@ -235,6 +242,23 @@ export function WeeklyWorkshop({ today, initialWeek }: WeeklyWorkshopProps) {
             </button>
           ))}
         </nav>
+
+        {missing.length > 0 && (
+          <AdminErrorAlert
+            variant="warning"
+            title="Hiányzó áhítat a már elérkezett napokra"
+            message={`${missing.map((m) => m.date).join(", ")} — ezekre a napokra a jóváhagyott terv még nem adott jóváhagyott áhítatot, a napi automatikus generálás pedig ki van hagyva. Az oldalon addig a legutóbbi áhítat látszik.`}
+            hint="Generáld le és hagyd jóvá a hiányzó napokat."
+          />
+        )}
+
+        {foreign.length > 0 && (
+          <AdminErrorAlert
+            variant="warning"
+            title="Napi folyamatból származó áhítat a héten"
+            message={`${foreign.map((f) => f.date).join(", ")} — ezeken a napokon már van másik forrásból (napi generálás) készült áhítat. A heti műhely ezt nem írja felül, és nem is generál rá.`}
+          />
+        )}
 
         {loadError && (
           <AdminErrorAlert

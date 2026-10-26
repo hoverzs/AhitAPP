@@ -293,7 +293,7 @@ test("a jóváhagyás visszavonása után a mai nap újra elérhetetlen (API és
   await appendDevotional(secret(today));
   assert.equal((await getPublicWindowDevotionals()).length, 1);
 
-  await updateDevotionalStatus(today, "needs_review");
+  await updateDevotionalStatus(today, "needs_review", { weeklyFlow: true }); // a visszavonás a heti műhely útja
   assert.equal((await getPublicWindowDevotionals()).length, 0);
   assert.equal((await resolveDevotionalView(today)).kind, "missing");
 });

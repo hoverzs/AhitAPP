@@ -135,6 +135,22 @@ export async function runDailyCronGeneration(options?: {
     const attempt = await runGenerationAttempt(date, { trigger: "cron" });
     const jobSummary = toAdminJobSummary(attempt.job);
 
+    // Jóváhagyott heti terv kezeli a napot: a napi generálás szándékosan kihagyva (az ok a válaszban és a naplóban).
+    if (attempt.skipReason) {
+      (attempt.contentGap ? cronWarn : cronLog)(attempt.skipReason, {
+        date,
+        weekId: attempt.managedByWeek,
+        contentGap: attempt.contentGap ?? false,
+      });
+      return {
+        outcome: "skipped",
+        message: attempt.skipReason,
+        date,
+        timestamp,
+        generationJob: jobSummary,
+      };
+    }
+
     if (attempt.success && attempt.devotional) {
       const d = attempt.devotional;
       logPexelsResult(d);

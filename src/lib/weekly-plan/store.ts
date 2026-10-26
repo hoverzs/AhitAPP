@@ -3,6 +3,7 @@ import { getAppTodayIso } from "../app-date";
 import { getDataBlobClient, resolveStorageDriver } from "../storage";
 import type { JsonBlobClient } from "../storage/blob/client";
 import { mutateJsonDocument } from "../storage/blob/json-cas";
+import { getLocalDataDir } from "../storage/local-data-dir";
 import { createLocalJsonClient } from "../storage/local-json-client";
 import {
   emptyRegistry,
@@ -171,7 +172,7 @@ export function getWeeklyPlanStore(): WeeklyPlanStore {
   if (driver === "blob") {
     client = getDataBlobClient();
   } else if (driver === "local") {
-    client = createLocalJsonClient(path.join(process.cwd(), "data", "weekly"));
+    client = createLocalJsonClient(path.join(getLocalDataDir(), "weekly"));
   } else {
     throw new WeeklyPlanUnsupportedError();
   }

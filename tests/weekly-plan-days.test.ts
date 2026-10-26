@@ -139,8 +139,10 @@ test("kész nap véletlen újragenerálása tiltott; kifejezett kéréssel verzi
   await assert.rejects(generateWeekDay({ weekId: NEXT_WEEK, date: monday }), DayAlreadyReadyError);
   assert.equal(gemini.bodyCalls().length, callsBefore, "elutasításnál nincs Gemini-hívás");
 
-  // Jóváhagyás után kényszerített újragenerálás: a státusz visszaáll ellenőrzésre.
+  // Jóváhagyott áhítat nem generálható újra: előbb vissza kell vonni a jóváhagyást.
   await setWeekDevotionalApproval({ weekId: NEXT_WEEK, approve: true, dates: [monday] });
+  await assert.rejects(generateWeekDay({ weekId: NEXT_WEEK, date: monday, force: true }), WeeklyPlanLockedError);
+  await setWeekDevotionalApproval({ weekId: NEXT_WEEK, approve: false, dates: [monday] });
   gemini.bodyReplies.push({ text: FULL_BODY.replace("csendes jelenléte", "csendes közelsége") });
   const regenerated = await generateWeekDay({ weekId: NEXT_WEEK, date: monday, force: true });
   assert.equal(regenerated.regenerated, true);

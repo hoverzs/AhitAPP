@@ -144,6 +144,12 @@ export async function generateWeekDay(
   if (existing && existing.weekId !== params.weekId) {
     throw new DayConflictError(day.date, existing.status ?? "published");
   }
+  // Jóváhagyott / közzétett áhítatot nem írunk újra: előbb vissza kell vonni a jóváhagyást.
+  if (existing && (existing.status === "approved" || existing.status === "published")) {
+    throw new WeeklyPlanLockedError(
+      `A(z) ${day.date} áhítat jóváhagyott — az újragenerálás előtt vond vissza a jóváhagyást.`
+    );
+  }
 
   // Egy korábbi, félbeszakadt futásból már megvan a teljes szöveg: nem hívjuk újra a Geminit.
   // (Elavult nap — a terv megváltozott a szöveg óta — nem egyeztethető: újra kell generálni.)
@@ -193,7 +199,9 @@ export async function generateWeekDay(
     devotional.status = "needs_review";
     devotional.lastApiError = undefined;
 
-    const saved = regenerate ? await upsertDevotional(devotional) : await appendDevotional(devotional);
+    const saved = regenerate
+      ? await upsertDevotional(devotional, { weeklyFlow: true })
+      : await appendDevotional(devotional);
     const updated = await setDayState(s, params.weekId, day.date, (d) => ({
       ...d,
       state: "ready",
@@ -264,13 +272,13 @@ export async function setWeekDevotionalApproval(
       else if (!isCompleteRecord(record)) skip("A szöveg hiányos — javítsd vagy generáld újra.");
       else if (record.status === "approved" || record.status === "published") skip("Már jóváhagyott.");
       else {
-        await updateDevotionalStatus(date, "approved");
+        await updateDevotionalStatus(date, "approved", { weeklyFlow: true });
         outcome.changed.push(date);
       }
     } else if (record.status !== "approved") {
       skip("Nincs jóváhagyva.");
     } else {
-      await updateDevotionalStatus(date, "needs_review");
+      await updateDevotionalStatus(date, "needs_review", { weeklyFlow: true });
       outcome.changed.push(date);
     }
   }

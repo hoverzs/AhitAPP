@@ -8,13 +8,10 @@ import {
   parseDevotionalList,
   sortDevotionals,
 } from "./devotional-validate";
+import { getLocalDataDir } from "./local-data-dir";
 import type { DevotionalStorage, GetLatestDevotionalsOptions } from "./types";
 
-export const LOCAL_DEVOTIONALS_PATH = path.join(
-  process.cwd(),
-  "data",
-  "devotionals.json"
-);
+export const LOCAL_DEVOTIONALS_PATH = path.join(getLocalDataDir(), "devotionals.json");
 
 async function readRawFromFile(): Promise<Devotional[]> {
   try {

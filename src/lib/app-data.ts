@@ -16,6 +16,7 @@ import { getPublicWindowDates } from "./public-window";
 import { buildDevotionalMemory, mergeStoredMetaIntoMemory } from "./devotional-memory";
 import {
   isPendingReview,
+  isPublicStatus,
   normalizeDevotional,
   statusLabelHu,
 } from "./devotional-status";
@@ -38,7 +39,13 @@ import {
 import { GEMINI_PLANNER_MODEL } from "./config";
 import { getLatestDevotional } from "./dashboard";
 import { TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE } from "./devotional-text-complete";
-import type { AdminDevotionalContext, AdminDevotionalListItem, Devotional } from "./types";
+import type {
+  AdminDevotionalContext,
+  AdminDevotionalListItem,
+  AdminReviewWarning,
+  Devotional,
+} from "./types";
+import { getManagingPlan } from "./weekly-plan/management";
 import type { DevotionalMemory } from "./devotional-memory";
 
 export interface PublicDay {
@@ -118,19 +125,46 @@ export async function buildAdminDevotionalContext(
     .find((d) => isPendingReview(d.status));
 
   let reviewWarning: string | undefined;
+  const todayForWarnings = getAppTodayIso();
 
-  const truncatedPending = devotionals
+  // Minden hiányos (félbeszakadt) szövegű, ellenőrzésre váró áhítat külön figyelmeztetést kap —
+  // dátummal és címmel, hogy a korábbi napok hibája ne tűnjön a mai áhítat hibájának.
+  const reviewWarnings: AdminReviewWarning[] = devotionals
     .map(normalizeDevotional)
-    .find(
+    .filter(
       (d) =>
         isPendingReview(d.status) &&
         d.lastApiError === TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE
-    );
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((d) => ({
+      date: d.date,
+      title: d.title,
+      message: TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE,
+      isToday: d.date === todayForWarnings,
+    }));
 
-  if (truncatedPending) {
-    reviewWarning = TRUNCATED_DEVOTIONAL_REVIEW_MESSAGE;
+  if (reviewWarnings.length > 0) {
+    reviewWarning = reviewWarnings
+      .map((w) => `${w.date}${w.title ? ` „${w.title}”` : ""}: ${w.message}`)
+      .join(" · ");
   } else if (DEV_REVIEW_MODE && pending) {
     reviewWarning = `A mai áhítat még nincs jóváhagyva (${statusLabelHu(pending.status)}). Fejlesztői módban nem generálunk további napokat.`;
+  }
+
+  // A mai napot jóváhagyott heti terv kezeli? (a napi cron ilyenkor kihagy — ne maradjon észrevétlen)
+  let weeklyPlanNotice: AdminDevotionalContext["weeklyPlanNotice"];
+  try {
+    const managing = await getManagingPlan(todayForWarnings);
+    if (managing) {
+      const record = devotionals.map(normalizeDevotional).find((d) => d.date === todayForWarnings);
+      weeklyPlanNotice = {
+        weekId: managing.weekId,
+        contentGap: !record || !isPublicStatus(record.status, record.weekId),
+      };
+    }
+  } catch (error) {
+    console.warn("[buildAdminDevotionalContext] heti terv ellenőrzése sikertelen:", error);
   }
 
   let todayGenerationJob = null;
@@ -157,6 +191,8 @@ export async function buildAdminDevotionalContext(
       blockedReason: target.blockedReason,
     },
     reviewWarning,
+    reviewWarnings,
+    weeklyPlanNotice,
     todayGenerationJob,
     externalRetryCron: {
       endpointUrl: getExternalRetryCronUrl(),

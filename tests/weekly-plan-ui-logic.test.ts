@@ -4,6 +4,8 @@ import {
   GENERATING_STALE_MS,
   describeDay,
   describeWeek,
+  foreignDays,
+  missingPublicDays,
   generationProgress,
   generationQueue,
   planStepState,
@@ -227,4 +229,29 @@ test("terv-lépés: hibák blokkolnak; a nyilvántartási ismétlés felülbír�
     warnings: [],
   });
   assert.equal(stillBlocked.blockers.length, 1, "a terven belüli ismétlést a felülbírálás nem oldja");
+});
+
+test("hiányzó nyilvános nap: az elérkezett, jóváhagyatlan napok jelzése; jövőbeli és idegen nap nem", () => {
+  const p = plan(Array.from({ length: 7 }, () => ({ state: "ready" as const })));
+  const records = [
+    summary("approved"), // 10-26: jóváhagyott
+    summary("needs_review"), // 10-27 (ma): még nincs jóváhagyva → hiány
+    null, // 10-28: jövő → nem hiány
+  ];
+  const views = describeWeek(overview(p, records), NOW);
+  const missing = missingPublicDays(p, views, "2026-10-27");
+  assert.deepEqual(missing.map((v) => v.date), ["2026-10-27"]);
+
+  const draft = { ...p, status: "draft" as const };
+  assert.deepEqual(missingPublicDays(draft, views, "2026-10-27"), [], "vázlat terv nem kezeli a napot");
+  assert.deepEqual(missingPublicDays(null, [], "2026-10-27"), []);
+});
+
+test("idegen forrású nap jelzése a héten", () => {
+  const p = plan();
+  const views = describeWeek(
+    overview(p, [{ status: "published", title: "Régi", weekId: undefined }]),
+    NOW
+  );
+  assert.deepEqual(foreignDays(views).map((v) => v.date), [p.days[0].date]);
 });
